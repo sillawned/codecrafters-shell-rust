@@ -17,9 +17,25 @@ fn main() {
             "exit" => {
                 result = cmd_line[1].parse().unwrap();
                 break;
-            },
+            }
             "echo" => {
                 print!("{}\n", &cmd_line[1..].join(" "));
+            }
+            "type" => {
+                match cmd_line[1] {
+                    "echo" => {
+                        print!("echo is a shell builtin\n");
+                    }
+                    "type" => {
+                        print!("type is a shell builtin\n");
+                    }
+                    "exit" => {
+                        print!("exit is a shell builtin\n");
+                    }
+                    _ => {
+                        print!("{}: command not found\n", &cmd_line[1]);
+                    }
+                }
             }
             _ => {
                 print!("{}: command not found\n", &cmd_line[0]);
