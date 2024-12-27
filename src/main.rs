@@ -33,7 +33,7 @@ fn main() {
                         print!("exit is a shell builtin\n");
                     }
                     _ => {
-                        print!("{}: command not found\n", &cmd_line[1]);
+                        print!("{}: not found\n", &cmd_line[1]);
                     }
                 }
             }
