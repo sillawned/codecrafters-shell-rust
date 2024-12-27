@@ -12,6 +12,7 @@ fn main() {
     // Wait for user input
     while let Ok(_) = stdin.read_line(&mut input) {
         print!("{}: command not found\n", input.trim());
+        input.clear();
         print!("$ ");
         io::stdout().flush().unwrap();
     }
