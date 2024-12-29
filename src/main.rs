@@ -49,18 +49,16 @@ fn main() {
                 if BUILTINS.contains(&&*tokens[1]) {
                     println!("{} is a shell builtin", &tokens[1]);
                 } else {
-                    let cmd_path = search_cmd(&*tokens[1], &paths);
-                    if cmd_path.is_some() {
-                        println!("{} is {}", &tokens[1], cmd_path.unwrap());
+                    if let Some(cmd_path) = search_cmd(&*tokens[0], &paths) {
+                        println!("{} is {}", &tokens[1], cmd_path);
                     } else {
                         println!("{}: not found", &*tokens[1]);
                     }
                 }
             }
             _ => {
-                let cmd_path = search_cmd(&*tokens[0], &paths);
-                if cmd_path.is_some() {
-                    let mut cmd = std::process::Command::new(cmd_path.unwrap());
+                if let Some(cmd_path) = search_cmd(&*tokens[0], &paths) {
+                    let mut cmd = std::process::Command::new(cmd_path);
                     let _ = cmd.args(&tokens[1..]).status();
                 } else {
                     print!("{}: command not found\n", &*tokens[0]);
