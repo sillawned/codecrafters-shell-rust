@@ -2,13 +2,14 @@
 use std::io::{self, Write};
 use std::process::exit;
 use std::string::String;
+use std::path::Path;
 
 const BUILTINS: [&str; 4] = ["exit", "echo", "type", "pwd"];
 
 fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
     for path in paths.split(":") {
         let cmd_path = format!("{}/{}", path, cmd);
-        if std::path::Path::new(&cmd_path).exists() {
+        if Path::new(&cmd_path).exists() {
             return Some(cmd_path);
         }
     }
@@ -43,7 +44,7 @@ fn main() {
                 if BUILTINS.contains(&&*tokens[1]) {
                     println!("{} is a shell builtin", &tokens[1]);
                 } else {
-                    if let Some(cmd_path) = search_cmd(&*tokens[0], &paths) {
+                    if let Some(cmd_path) = search_cmd(&*tokens[1], &paths) {
                         println!("{} is {}", &tokens[1], cmd_path);
                     } else {
                         println!("{}: not found", &*tokens[1]);
