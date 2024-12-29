@@ -25,13 +25,6 @@ fn main() {
                 print!("{}\n", &cmd_line[1..].join(" "));
             }
             "type" => {
-                for path in paths.split(":") {
-                    let cmd_path = format!("{}/{}", path, cmd_line[1]);
-                    if std::path::Path::new(&cmd_path).exists() {
-                        print!("{} is {}\n", &cmd_line[1], &cmd_path);
-                        break;
-                    } 
-                }
                 match cmd_line[1] {
                     "echo" => {
                         print!("echo is a shell builtin\n");
@@ -43,7 +36,18 @@ fn main() {
                         print!("exit is a shell builtin\n");
                     }
                     _ => {
-                        print!("{}: not found\n", &cmd_line[1]);
+                        let mut found = false;
+                        for path in paths.split(":") {
+                            let cmd_path = format!("{}/{}", path, cmd_line[1]);
+                            if std::path::Path::new(&cmd_path).exists() {
+                                print!("{} is {}\n", &cmd_line[1], &cmd_path);
+                                found = true;
+                                break;
+                            } 
+                        }
+                        if !found {
+                            println!("{}: not found", &cmd_line[1]);
+                        }
                     }
                 }
             }
