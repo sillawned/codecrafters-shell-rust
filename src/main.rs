@@ -56,6 +56,10 @@ fn main() {
                     }
                 }
             }
+            "pwd" => {
+                let path = std::env::current_dir().unwrap();
+                println!("{}", path.display());
+            }
             _ => {
                 if let Some(cmd_path) = search_cmd(&*tokens[0], &paths) {
                     let mut cmd = std::process::Command::new(cmd_path);
