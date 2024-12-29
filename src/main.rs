@@ -4,36 +4,47 @@ use std::process::exit;
 
 fn main() {
         
-    let mut input = String::new();
     let stdin = io::stdin();
-    let mut result: i32 = 0;
-    print!("$ ");
-    io::stdout().flush().unwrap();
+    let paths = std::env::var( "PATH").unwrap();
+
+    let mut input = String::new();
 
     // Wait for user input
-    while let Ok(_) = stdin.read_line(&mut input) {
+    loop {
+        print!("$ ");
+        io::stdout().flush().unwrap();
+            
+        let _ = stdin.read_line(&mut input);
         let cmd_line: Vec<_> = input.trim().split(" ").collect();
+
         match cmd_line[0] {
             "exit" => {
-                result = cmd_line[1].parse().unwrap();
-                break;
+                exit(cmd_line[1].parse().unwrap());
             }
             "echo" => {
                 print!("{}\n", &cmd_line[1..].join(" "));
             }
             "type" => {
-                match cmd_line[1] {
-                    "echo" => {
-                        print!("echo is a shell builtin\n");
-                    }
-                    "type" => {
-                        print!("type is a shell builtin\n");
-                    }
-                    "exit" => {
-                        print!("exit is a shell builtin\n");
-                    }
-                    _ => {
-                        print!("{}: not found\n", &cmd_line[1]);
+                for path in paths.split(":") {
+                    let cmd_path = format!("{}/{}", path, cmd_line[1]);
+                    if std::path::Path::new(&cmd_path).exists() {
+                        print!("{} is {}\n", &cmd_line[1], &cmd_path);
+                        break;
+                    } else {
+                        match cmd_line[1] {
+                            "echo" => {
+                                print!("echo is a shell builtin\n");
+                            }
+                            "type" => {
+                                print!("type is a shell builtin\n");
+                            }
+                            "exit" => {
+                                print!("exit is a shell builtin\n");
+                            }
+                            _ => {
+                                print!("{}: not found\n", &cmd_line[1]);
+                            }
+                        }
                     }
                 }
             }
@@ -46,6 +57,4 @@ fn main() {
         print!("$ ");
         io::stdout().flush().unwrap();
     }
-
-    exit(result);
 }
