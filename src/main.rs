@@ -30,21 +30,20 @@ fn main() {
                     if std::path::Path::new(&cmd_path).exists() {
                         print!("{} is {}\n", &cmd_line[1], &cmd_path);
                         break;
-                    } else {
-                        match cmd_line[1] {
-                            "echo" => {
-                                print!("echo is a shell builtin\n");
-                            }
-                            "type" => {
-                                print!("type is a shell builtin\n");
-                            }
-                            "exit" => {
-                                print!("exit is a shell builtin\n");
-                            }
-                            _ => {
-                                print!("{}: not found\n", &cmd_line[1]);
-                            }
-                        }
+                    } 
+                }
+                match cmd_line[1] {
+                    "echo" => {
+                        print!("echo is a shell builtin\n");
+                    }
+                    "type" => {
+                        print!("type is a shell builtin\n");
+                    }
+                    "exit" => {
+                        print!("exit is a shell builtin\n");
+                    }
+                    _ => {
+                        print!("{}: not found\n", &cmd_line[1]);
                     }
                 }
             }
