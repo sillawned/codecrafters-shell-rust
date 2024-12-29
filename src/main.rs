@@ -54,10 +54,7 @@ fn main() {
             _ => {
                 print!("{}: command not found\n", &cmd_line[0]);
             }
-            
         }
         input.clear();
-        print!("$ ");
-        io::stdout().flush().unwrap();
     }
 }
