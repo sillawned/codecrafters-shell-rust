@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use std::process::exit;
 use std::string::String;
 
-const BUILTINS: [&str; 3] = ["exit", "echo", "type"];
+const BUILTINS: [&str; 4] = ["exit", "echo", "type", "pwd"];
 
 fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
     for path in paths.split(":") {
@@ -39,12 +39,6 @@ fn main() {
         //println!("{:?}", tokens);
 
         match &*tokens[0] {
-            "exit" => {
-                exit(tokens[1].parse().unwrap());
-            }
-            "echo" => {
-                println!("{}", &tokens[1..].join(" "));
-            }
             "type" => {
                 if BUILTINS.contains(&&*tokens[1]) {
                     println!("{} is a shell builtin", &tokens[1]);
@@ -55,6 +49,12 @@ fn main() {
                         println!("{}: not found", &*tokens[1]);
                     }
                 }
+            }
+            "exit" => {
+                exit(tokens[1].parse().unwrap());
+            }
+            "echo" => {
+                println!("{}", &tokens[1..].join(" "));
             }
             "pwd" => {
                 let path = std::env::current_dir().unwrap();
