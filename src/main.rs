@@ -67,7 +67,7 @@ fn main() {
                     if error.kind() == io::ErrorKind::NotFound {
                         println!("cd: {}: No such file or directory", path);
                     } else {
-                        println!("cd: {}: {}", path, error);
+                        print!("cd: {}: {}\n", path, error);
                     }
                 });
             }
