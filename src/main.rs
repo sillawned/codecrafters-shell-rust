@@ -4,7 +4,7 @@ use std::process::exit;
 use std::string::String;
 use std::path::Path;
 
-const BUILTINS: [&str; 4] = ["exit", "echo", "type", "pwd"];
+const BUILTINS: [&str; 5] = ["exit", "echo", "type", "pwd", "cd"];
 
 fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
     for path in paths.split(":") {
@@ -60,6 +60,12 @@ fn main() {
             "pwd" => {
                 let path = std::env::current_dir().unwrap();
                 println!("{}", path.display());
+            }
+            "cd" => {
+                let path = &tokens[1];
+                if let Err(e) = std::env::set_current_dir(path) {
+                    println!("cd: {}: {}", path, e);
+                }
             }
             _ => {
                 if let Some(cmd_path) = search_cmd(&*tokens[0], &paths) {
