@@ -63,9 +63,13 @@ fn main() {
             }
             "cd" => {
                 let path = &tokens[1];
-                if let Err(e) = std::env::set_current_dir(path) {
-                    println!("cd: {}: {}", path, e);
-                }
+                let _ = std::env::set_current_dir(path).unwrap_or_else(|error| {
+                    if error.kind() == io::ErrorKind::NotFound {
+                        println!("cd: {}: No such file or directory", path);
+                    } else {
+                        println!("cd: {}: {}", path, error);
+                    }
+                });
             }
             _ => {
                 if let Some(cmd_path) = search_cmd(&*tokens[0], &paths) {
