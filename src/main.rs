@@ -1,6 +1,25 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
 use std::process::exit;
+use std::string::String;
+
+const BUILTINS: [&str; 3] = ["exit", "echo", "type"];
+
+fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
+    for path in paths.split(":") {
+        let cmd_path = format!("{}/{}", path, cmd);
+        if std::path::Path::new(&cmd_path).exists() {
+            return Some(cmd_path);
+        }
+    }
+    None
+}
+
+//https://dustinknopoff.dev/articles/minishell/
+fn tokenize(input: &str) -> Vec<String> {
+    let args: Vec<_> = input.split_whitespace().map(|s| s.to_string()).collect();
+    args
+}
 
 fn main() {
         
@@ -15,44 +34,37 @@ fn main() {
         io::stdout().flush().unwrap();
             
         let _ = stdin.read_line(&mut input);
-        let cmd_line: Vec<_> = input.trim().split(" ").collect();
+        let tokens: Vec<String> = tokenize(&input);
 
-        match cmd_line[0] {
+        //println!("{:?}", tokens);
+
+        match &*tokens[0] {
             "exit" => {
-                exit(cmd_line[1].parse().unwrap());
+                exit(tokens[1].parse().unwrap());
             }
             "echo" => {
-                print!("{}\n", &cmd_line[1..].join(" "));
+                println!("{}", &tokens[1..].join(" "));
             }
             "type" => {
-                match cmd_line[1] {
-                    "echo" => {
-                        print!("echo is a shell builtin\n");
-                    }
-                    "type" => {
-                        print!("type is a shell builtin\n");
-                    }
-                    "exit" => {
-                        print!("exit is a shell builtin\n");
-                    }
-                    _ => {
-                        let mut found = false;
-                        for path in paths.split(":") {
-                            let cmd_path = format!("{}/{}", path, cmd_line[1]);
-                            if std::path::Path::new(&cmd_path).exists() {
-                                print!("{} is {}\n", &cmd_line[1], &cmd_path);
-                                found = true;
-                                break;
-                            } 
-                        }
-                        if !found {
-                            println!("{}: not found", &cmd_line[1]);
-                        }
+                if BUILTINS.contains(&&*tokens[1]) {
+                    println!("{} is a shell builtin", &tokens[1]);
+                } else {
+                    let cmd_path = search_cmd(&*tokens[1], &paths);
+                    if cmd_path.is_some() {
+                        println!("{} is {}", &tokens[1], cmd_path.unwrap());
+                    } else {
+                        println!("{}: not found", &*tokens[1]);
                     }
                 }
             }
             _ => {
-                print!("{}: command not found\n", &cmd_line[0]);
+                let cmd_path = search_cmd(&*tokens[0], &paths);
+                if cmd_path.is_some() {
+                    let mut cmd = std::process::Command::new(cmd_path.unwrap());
+                    let _ = cmd.args(&tokens[1..]).status();
+                } else {
+                    print!("{}: command not found\n", &*tokens[0]);
+                }
             }
         }
         input.clear();
