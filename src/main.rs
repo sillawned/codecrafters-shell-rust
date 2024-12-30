@@ -16,10 +16,47 @@ fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
     None
 }
 
-//https://dustinknopoff.dev/articles/minishell/
+// https://dustinknopoff.dev/articles/minishell/
 fn tokenize(input: &str) -> Vec<String> {
-    let args: Vec<_> = input.split_whitespace().map(|s| s.to_string()).collect();
-    args
+    // Split the input into tokens
+
+    // Before we split the input into tokens, we need to handle single quotes.
+    // Single quotes are used to prevent the shell from interpreting special characters.
+    // We need to remove the single quotes and treat the content inside as a single token.
+    // For example, if the input is echo 'Hello, World!', we should get ["echo", "Hello, World!"] as tokens.
+    let input = input.trim().to_string();
+    let mut tokens = Vec::new();
+    let mut in_single_quote = false;
+    let mut token = String::new();
+    for c in input.chars() {
+        match c {
+            ' ' => {
+                if in_single_quote {
+                    token.push(c);
+                } else {
+                    if !token.is_empty() {
+                        tokens.push(token.clone());
+                        token.clear();
+                    }
+                }
+            }
+            '\'' => {
+                // A single quote cannot be enclosed in another single quote.
+                // So we can safely toggle the in_single_quote flag.
+                in_single_quote = !in_single_quote;
+            }
+            _ => {
+                token.push(c);
+            }
+        }
+    }
+    // The last word may not be followed by a space.
+    if !token.is_empty() {
+       tokens.push(token.clone());
+       token.clear();
+    }
+
+    tokens
 }
 
 fn main() {
@@ -37,7 +74,7 @@ fn main() {
         let _ = stdin.read_line(&mut input);
         let tokens: Vec<String> = tokenize(&input);
 
-        //println!("{:?}", tokens);
+        println!("{:?}", tokens);
 
         match &*tokens[0] {
             "type" => {
@@ -47,7 +84,7 @@ fn main() {
                     if let Some(cmd_path) = search_cmd(&*tokens[1], &paths) {
                         println!("{} is {}", &tokens[1], cmd_path);
                     } else {
-                        println!("{}: not found", &*tokens[1]);
+                        eprintln!("{}: not found", &*tokens[1]);
                     }
                 }
             }
@@ -69,9 +106,9 @@ fn main() {
                 };
                 let _ = std::env::set_current_dir(&path).unwrap_or_else(|error| {
                     if error.kind() == io::ErrorKind::NotFound {
-                        println!("cd: {}: No such file or directory", path);
+                        eprintln!("cd: {}: No such file or directory", path);
                     } else {
-                        print!("cd: {}: {}\n", path, error);
+                        eprintln!("cd: {}: {}", path, error);
                     }
                 });
             }
@@ -80,7 +117,7 @@ fn main() {
                     let mut cmd = std::process::Command::new(cmd_path);
                     let _ = cmd.args(&tokens[1..]).status();
                 } else {
-                    print!("{}: command not found\n", &*tokens[0]);
+                    eprint!("{}: command not found\n", &*tokens[0]);
                 }
             }
         }
