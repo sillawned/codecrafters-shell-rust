@@ -74,6 +74,7 @@ fn main() {
         let _ = stdin.read_line(&mut input);
         let tokens: Vec<String> = tokenize(&input);
 
+        #[cfg(debug_assertions)]
         println!("{:?}", tokens);
 
         match &*tokens[0] {
