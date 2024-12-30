@@ -62,8 +62,12 @@ fn main() {
                 println!("{}", path.display());
             }
             "cd" => {
-                let path = &tokens[1];
-                let _ = std::env::set_current_dir(path).unwrap_or_else(|error| {
+                let path = if vec!["", "~"].contains(&&*tokens[1]) {
+                    std::env::var("HOME").unwrap()
+                } else {
+                    tokens[1].clone()
+                };
+                let _ = std::env::set_current_dir(&path).unwrap_or_else(|error| {
                     if error.kind() == io::ErrorKind::NotFound {
                         println!("cd: {}: No such file or directory", path);
                     } else {
