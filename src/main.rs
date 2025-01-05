@@ -78,14 +78,16 @@ fn unquote(input: String) -> Vec<String> {
                 }
             }
             '"' => {
-                if in_single_quote {
+                if in_single_quote || was_escaped {
+                    was_escaped = false;
                     token.push(c);
                 } else {
                     in_double_quote = !in_double_quote;
                 }
             }
             '\'' => {
-                if in_double_quote {
+                if in_double_quote || was_escaped{
+                    was_escaped = false;
                     token.push(c);
                 } else {
                     in_single_quote = !in_single_quote;
