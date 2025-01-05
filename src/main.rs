@@ -5,6 +5,8 @@ use std::string::String;
 use std::path::Path;
 
 const BUILTINS: [&str; 5] = ["exit", "echo", "type", "pwd", "cd"];
+//const CONTROL_OPERATORS: [&str; 12] = ["\n", "&&", "||", "&", ";", ";;", ";&", ";;&", "|", "|&", "(", ")"];
+//const META_CHARACTERS: [&str; 10] = [" ", "\t", "\n", "|", "&", ";", "(", ")", "<", ">"];
 
 fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
     for path in paths.split(":") {
@@ -19,19 +21,27 @@ fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
 // https://dustinknopoff.dev/articles/minishell/
 fn tokenize(input: &str) -> Vec<String> {
     // Split the input into tokens
-
-    // Before we split the input into tokens, we need to handle single quotes.
-    // Single quotes are used to prevent the shell from interpreting special characters.
-    // We need to remove the single quotes and treat the content inside as a single token.
-    // For example, if the input is echo 'Hello, World!', we should get ["echo", "Hello, World!"] as tokens.
     let input = input.trim().to_string();
-    let mut tokens = Vec::new();
+
+    // Input can contain double and single quotes
+    // We need to handle them from left to right
+    // For example, if the input is echo "single 'quote' inside double quote", we should get ["echo", "single 'quote' inside double quote"] as tokens.
+    // And if the input is echo 'double "quote" inside single quote', we should get ["echo", "double "quote" inside single quote"] as tokens.
+    let tokens = unquote(input);
+
+    tokens
+}
+
+fn unquote(input: String) -> Vec<String> {
+    let mut in_double_quote = false;
     let mut in_single_quote = false;
     let mut token = String::new();
+    let mut tokens = Vec::new();
+
     for c in input.chars() {
         match c {
             ' ' => {
-                if in_single_quote {
+                if in_double_quote || in_single_quote {
                     token.push(c);
                 } else {
                     if !token.is_empty() {
@@ -40,10 +50,33 @@ fn tokenize(input: &str) -> Vec<String> {
                     }
                 }
             }
+            '\\' => {
+                // Enclosed by double quotes, the backslash retains its special meaning when followed by "$", "`", """, "\", or newline
+                if in_double_quote {
+                    if let Some(next_char) = input.chars().nth(input.chars().position(|x| x == c).unwrap() + 1) {
+                        if next_char == '$' || next_char == '`' || next_char == '"' || next_char == '\\' || next_char == '\n' {
+                            token.push(next_char);
+                        } else {
+                            token.push(c);
+                        }
+                    }
+                } else {
+                    token.push(c);
+                }
+            }
+            '"' => {
+                if in_single_quote {
+                    token.push(c);
+                } else {
+                    in_double_quote = !in_double_quote;
+                }
+            }
             '\'' => {
-                // A single quote cannot be enclosed in another single quote.
-                // So we can safely toggle the in_single_quote flag.
-                in_single_quote = !in_single_quote;
+                if in_double_quote {
+                    token.push(c);
+                } else {
+                    in_single_quote = !in_single_quote;
+                }
             }
             _ => {
                 token.push(c);
