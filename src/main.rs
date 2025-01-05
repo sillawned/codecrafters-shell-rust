@@ -36,14 +36,15 @@ fn unquote(input: String) -> Vec<String> {
     let mut in_double_quote = false;
     let mut in_single_quote = false;
     let mut was_escaped = false;
+
     let mut token = String::new();
     let mut tokens = Vec::new();
 
-    for c in input.chars() {
+    for (position, c ) in input.chars().enumerate() {
         match c {
             ' ' => {
-                if was_escaped{
-                    was_escaped = !was_escaped;
+                if was_escaped {
+                    was_escaped = false;
                     continue;
                 } else if in_double_quote || in_single_quote {
                     token.push(c);
@@ -57,7 +58,7 @@ fn unquote(input: String) -> Vec<String> {
             '\\' => {
                 // Enclosed by double quotes, the backslash retains its special meaning when followed by "$", "`", """, "\", or newline
                 if in_double_quote {
-                    if let Some(next_char) = input.chars().nth(input.chars().position(|x| x == c).unwrap() + 1) {
+                    if let Some(next_char) = input.chars().nth(position + 1) {
                         if next_char == '$' || next_char == '`' || next_char == '"' || next_char == '\\' || next_char == '\n' {
                             token.push(next_char);
                         } else {
@@ -67,7 +68,7 @@ fn unquote(input: String) -> Vec<String> {
                 } else if in_single_quote {
                     token.push(c);
                 } else {
-                    if let Some(next_char) = input.chars().nth(input.chars().position(|x| x == c).unwrap() + 1) {
+                    if let Some(next_char) = input.chars().nth(position + 1) {
                         if next_char == '\n' {
                             continue;
                         } else {
