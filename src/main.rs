@@ -61,7 +61,14 @@ fn unquote(input: String) -> Vec<String> {
                         }
                     }
                 } else {
-                    token.push(c);
+                    if let Some(next_char) = input.chars().nth(input.chars().position(|x| x == c).unwrap() + 1) {
+                        if next_char != '\n' {
+                            token.push(next_char);
+                        } else {
+                            // If the backslash is followed by a newline, the backslash is removed and the newline is ignored.
+                            continue;
+                        } 
+                    }
                 }
             }
             '"' => {
