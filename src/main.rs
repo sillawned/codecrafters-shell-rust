@@ -35,13 +35,17 @@ fn tokenize(input: &str) -> Vec<String> {
 fn unquote(input: String) -> Vec<String> {
     let mut in_double_quote = false;
     let mut in_single_quote = false;
+    let mut was_escaped = false;
     let mut token = String::new();
     let mut tokens = Vec::new();
 
     for c in input.chars() {
         match c {
             ' ' => {
-                if in_double_quote || in_single_quote {
+                if was_escaped{
+                    was_escaped = !was_escaped;
+                    continue;
+                } else if in_double_quote || in_single_quote {
                     token.push(c);
                 } else {
                     if !token.is_empty() {
@@ -60,14 +64,16 @@ fn unquote(input: String) -> Vec<String> {
                             token.push(c);
                         }
                     }
+                } else if in_single_quote {
+                    token.push(c);
                 } else {
                     if let Some(next_char) = input.chars().nth(input.chars().position(|x| x == c).unwrap() + 1) {
-                        if next_char != '\n' {
-                            token.push(next_char);
-                        } else {
-                            // If the backslash is followed by a newline, the backslash is removed and the newline is ignored.
+                        if next_char == '\n' {
                             continue;
-                        } 
+                        } else {
+                            token.push(next_char);
+                            was_escaped = true;
+                        }
                     }
                 }
             }
