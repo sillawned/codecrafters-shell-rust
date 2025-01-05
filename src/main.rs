@@ -58,10 +58,15 @@ fn unquote(input: String) -> Vec<String> {
             }
             '\\' => {
                 // Enclosed by double quotes, the backslash retains its special meaning when followed by "$", "`", """, "\", or newline
+                if was_escaped {
+                    was_escaped = false;
+                    continue;
+                }
                 if in_double_quote {
                     if let Some(next_char) = input.chars().nth(position + 1) {
                         if next_char == '$' || next_char == '`' || next_char == '"' || next_char == '\\' || next_char == '\n' {
                             token.push(next_char);
+                            was_escaped = true;
                         } else {
                             token.push(c);
                         }
