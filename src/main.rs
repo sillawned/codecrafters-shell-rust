@@ -1,12 +1,14 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
+use std::path::Path;
 use std::process::exit;
 use std::string::String;
-use std::path::Path;
 
 const BUILTINS: [&str; 5] = ["exit", "echo", "type", "pwd", "cd"];
-//const CONTROL_OPERATORS: [&str; 12] = ["\n", "&&", "||", "&", ";", ";;", ";&", ";;&", "|", "|&", "(", ")"];
-//const META_CHARACTERS: [&str; 10] = [" ", "\t", "\n", "|", "&", ";", "(", ")", "<", ">"];
+const CONTROL_OPERATORS: [&str; 12] = [
+    "\n", "&&", "||", "&", ";", ";;", ";&", ";;&", "|", "|&", "(", ")",
+];
+const META_CHARACTERS: [&str; 10] = [" ", "\t", "\n", "|", "&", ";", "(", ")", "<", ">"];
 
 fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
     for path in paths.split(":") {
@@ -40,7 +42,7 @@ fn unquote(input: String) -> Vec<String> {
     let mut token = String::new();
     let mut tokens = Vec::new();
 
-    for (position, c ) in input.chars().enumerate() {
+    for (position, c) in input.chars().enumerate() {
         match c {
             ' ' => {
                 if was_escaped {
@@ -64,7 +66,12 @@ fn unquote(input: String) -> Vec<String> {
                 }
                 if in_double_quote {
                     if let Some(next_char) = input.chars().nth(position + 1) {
-                        if next_char == '$' || next_char == '`' || next_char == '"' || next_char == '\\' || next_char == '\n' {
+                        if next_char == '$'
+                            || next_char == '`'
+                            || next_char == '"'
+                            || next_char == '\\'
+                            || next_char == '\n'
+                        {
                             token.push(next_char);
                             was_escaped = true;
                         } else {
@@ -117,17 +124,16 @@ fn unquote(input: String) -> Vec<String> {
     }
     // The last word may not be followed by a space.
     if !token.is_empty() {
-       tokens.push(token.clone());
-       token.clear();
+        tokens.push(token.clone());
+        token.clear();
     }
 
     tokens
 }
 
 fn main() {
-        
     let stdin = io::stdin();
-    let paths = std::env::var( "PATH").unwrap();
+    let paths = std::env::var("PATH").unwrap();
 
     let mut input = String::new();
 
@@ -135,12 +141,29 @@ fn main() {
     loop {
         print!("$ ");
         io::stdout().flush().unwrap();
-            
+
         let _ = stdin.read_line(&mut input);
         let tokens: Vec<String> = tokenize(&input);
 
+        // Now that we have tokenized the input, we can start parsing it
+        // We should chekc that if there is one or more control operators in the input
+        // And split the input into multiple commands based on the control operators
+        // For example, if the input is "echo hello && echo world", we should get ["echo hello", "&&", "echo world"] as commands
+        let mut commands = Vec::new();
+        let mut command = Vec::new();
+        for token in &tokens {
+            if CONTROL_OPERATORS.contains(&token.as_str()) {
+                commands.push(command.clone());
+                command.clear();
+                commands.push(vec![token]);
+            } else {
+                command.push(token);
+            }
+        }
+
         #[cfg(debug_assertions)]
-        println!("{:?}", tokens);
+        println!("Tokens: {:?}.", tokens);
+        println!("Commands: {:?}.", commands);
 
         match &*tokens[0] {
             "type" => {
