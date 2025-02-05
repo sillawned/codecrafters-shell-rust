@@ -107,6 +107,7 @@ where
                             _ => return Err(format!("Unknown redirection operator: {}", op)),
                         },
                     };
+                    fd = -1; // Reset file descriptor after using it
                 } else {
                     return Err("Expected file after redirection operator".to_string());
                 }
