@@ -102,7 +102,7 @@ pub fn tokenize(input: &str) -> Vec<TokenType> {
                 }
                 tokens.push(TokenType::Semicolon);
             }
-            '>' if !in_quote => {
+            '>' | '<' if !in_quote => {
                 if !token.is_empty() {
                     if let Ok(fd) = token.parse::<i32>() {
                         tokens.push(TokenType::FileDescriptor(fd));
@@ -112,28 +112,13 @@ pub fn tokenize(input: &str) -> Vec<TokenType> {
                         token.clear();
                     }
                 }
-                if let Some(&next_c) = chars.peek() {
-                    if next_c == '>' {
-                        chars.next(); // Consume the next same character
-                        tokens.push(TokenType::RedirectionOperator(">>".to_string()));
-                    } else {
-                        tokens.push(TokenType::RedirectionOperator(">".to_string()));
-                    }
+                let operator = if c == '>' && chars.peek() == Some(&'>') {
+                    chars.next(); // Consume the next '>'
+                    ">>".to_string()
                 } else {
-                    tokens.push(TokenType::RedirectionOperator(">".to_string()));
-                }
-            }
-            '<' if !in_quote => {
-                if !token.is_empty() {
-                    if let Ok(fd) = token.parse::<i32>() {
-                        tokens.push(TokenType::FileDescriptor(fd));
-                        token.clear();
-                    } else {
-                        tokens.push(TokenType::Word(token.clone()));
-                        token.clear();
-                    }
-                }
-                tokens.push(TokenType::RedirectionOperator("<".to_string()));
+                    c.to_string()
+                };
+                tokens.push(TokenType::RedirectionOperator(operator));
             }
             '(' if !in_quote => {
                 if !token.is_empty() {
