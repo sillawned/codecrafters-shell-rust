@@ -10,12 +10,27 @@ pub enum ASTNode {
     },
     Redirect {
         command: Box<ASTNode>,
+        fd: i32,
         file: String,
         mode: RedirectMode,
     },
-    Builtin {
-        name: String,
-        args: Vec<String>,
+    Background {
+        command: Box<ASTNode>,
+    },
+    LogicalAnd {
+        left: Box<ASTNode>,
+        right: Box<ASTNode>,
+    },
+    LogicalOr {
+        left: Box<ASTNode>,
+        right: Box<ASTNode>,
+    },
+    Subshell {
+        command: Box<ASTNode>,
+    },
+    Semicolon {
+        left: Box<ASTNode>,
+        right: Box<ASTNode>,
     },
 }
 

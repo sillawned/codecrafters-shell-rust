@@ -23,10 +23,13 @@ fn main() {
         }
 
         let tokens = tokenizer::tokenize(&input);
+        #[cfg(debug_assertions)]
+        println!("Tokens: {:?}", tokens);
+
         let ast = match parser::parse(&tokens) {
             Ok(ast) => ast,
             Err(e) => {
-                eprintln!("Perse error: {}", e);
+                eprintln!("Parse error: {}", e);
                 input.clear();
                 continue;
             }
