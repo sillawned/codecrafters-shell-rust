@@ -100,6 +100,10 @@ fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> T
 
     while let Some(&c) = chars.peek() {
         match (quote_state, c) {
+            (QuoteState::None, _) => {
+                quoted_string.push(c);
+                chars.next();
+            }
             (QuoteState::Single, '\'') => {
                 chars.next();
                 break;
