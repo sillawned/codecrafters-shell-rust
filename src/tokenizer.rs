@@ -23,8 +23,8 @@ pub fn tokenize(input: &str) -> Vec<TokenType> {
     let mut tokens = Vec::new();
     let mut chars = input.chars().peekable();
 
-    while let Some(_) = chars.peek() {
-        match _ {
+    while let Some(&c) = chars.peek() {
+        match c {
             '\\' => {
                 chars.next();
                 if let Some(escaped_char) = chars.next() {
