@@ -88,7 +88,7 @@ pub fn tokenize(input: &str) -> Vec<TokenType> {
 fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
     let mut quoted_string = String::new();
     let quote_char = chars.next().unwrap();
-    if (quote_char == '\'') {
+    if quote_char == '\'' {
         // Single-quoted string: preserve literal value of each character
         while let Some(&next_c) = chars.peek() {
             if next_c == '\'' {
@@ -99,13 +99,19 @@ fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> T
             chars.next();
         }
     } else {
-        // Double-quoted string: allow escape sequences
+        // Double-quoted string: allow escape sequences, but preserve backslash followed by single quote
         while let Some(&next_c) = chars.peek() {
             if next_c == '\\' {
                 chars.next(); // Consume the backslash
                 if let Some(&escaped_char) = chars.peek() {
-                    quoted_string.push(escaped_char);
-                    chars.next(); // Consume the escaped character
+                    if escaped_char == '\'' {
+                        quoted_string.push('\\');
+                        quoted_string.push('\'');
+                        chars.next(); // Consume the escaped single quote
+                    } else {
+                        quoted_string.push(escaped_char);
+                        chars.next(); // Consume the escaped character
+                    }
                 }
             } else if next_c == '"' {
                 chars.next(); // Consume the closing quote
