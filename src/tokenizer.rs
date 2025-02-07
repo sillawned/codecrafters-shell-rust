@@ -15,7 +15,15 @@ pub enum TokenType {
     Comment(String),            // Comment starting with #
     Assignment(String, String), // Variable assignment, e.g., VAR=value
     Newline,                   // Newline character
-    QuotedString(String),      // Quoted strings
+    SingleQuotedString(String), // Single-quoted strings
+    DoubleQuotedString(String), // Double-quoted strings
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum QuoteState {
+    None,
+    Single,
+    Double,
 }
 
 pub fn tokenize(input: &str) -> Vec<TokenType> {
@@ -86,46 +94,56 @@ pub fn tokenize(input: &str) -> Vec<TokenType> {
 }
 
 fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
-    let mut quoted_string = String::new();
+    let mut string = String::new();
     let quote_char = chars.next().unwrap();
-    if quote_char == '\'' {
-        // Single-quoted string: preserve literal value of each character
-        while let Some(&next_c) = chars.peek() {
-            if next_c == '\'' {
-                chars.next(); // Consume the closing quote
+    let quote_state = if quote_char == '\'' { QuoteState::Single } else { QuoteState::Double };
+
+    while let Some(&c) = chars.peek() {
+        match (quote_state, c) {
+            (QuoteState::Single, '\'') => {
+                chars.next();
                 break;
             }
-            quoted_string.push(next_c);
-            chars.next(); // Consume the character inside the quotes
-        }
-    } else {
-        // Double-quoted string: allow escape sequences and variable expansion
-        while let Some(&next_c) = chars.peek() {
-            if next_c == '\\' {
-                chars.next(); // Consume the backslash
-                if let Some(&escaped_char) = chars.peek() {
-                    match escaped_char {
-                        '\\' | '"' | '$' | '`' | '\n' => {
-                            quoted_string.push(escaped_char);
-                            chars.next(); // Consume the escaped character
+            (QuoteState::Single, _) => {
+                string.push(c);
+                chars.next();
+            }
+            (QuoteState::Double, '"') => {
+                chars.next();
+                break;
+            }
+            (QuoteState::Double, '\\') => {
+                chars.next(); // consume backslash
+                if let Some(&next_c) = chars.peek() {
+                    match next_c {
+                        '$' | '`' | '"' | '\\' => {
+                            string.push(next_c);
+                            chars.next();
+                        }
+                        '\n' => {
+                            chars.next(); // ignore escaped newline
                         }
                         _ => {
-                            quoted_string.push('\\');
-                            quoted_string.push(escaped_char);
-                            chars.next(); // Consume the escaped character
+                            string.push('\\');
+                            string.push(next_c);
+                            chars.next();
                         }
                     }
                 }
-            } else if next_c == '"' {
-                chars.next(); // Consume the closing quote
-                break;
-            } else {
-                quoted_string.push(next_c);
-                chars.next(); // Consume the character inside the quotes
             }
+            (QuoteState::Double, _) => {
+                string.push(c);
+                chars.next();
+            }
+            _ => unreachable!(),
         }
     }
-    TokenType::QuotedString(quoted_string)
+
+    match quote_state {
+        QuoteState::Single => TokenType::SingleQuotedString(string),
+        QuoteState::Double => TokenType::DoubleQuotedString(string),
+        _ => unreachable!(),
+    }
 }
 
 fn tokenize_pipe(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
@@ -235,12 +253,25 @@ fn tokenize_file_descriptor(chars: &mut std::iter::Peekable<std::str::Chars>) ->
 
 fn tokenize_word(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
     let mut word = String::new();
+    let mut quote_state = QuoteState::None;
+
     while let Some(&c) = chars.peek() {
-        if c == ' ' || c == '\t' || c == '\n' || c == '|' || c == '&' || c == ';' || c == '>' || c == '<' || c == '(' || c == ')' || c == '$' || c == '#' || c == '=' {
-            break;
+        match (quote_state, c) {
+            (QuoteState::None, '\\') => {
+                chars.next();
+                if let Some(&escaped_char) = chars.peek() {
+                    word.push(escaped_char);
+                    chars.next();
+                }
+            }
+            (QuoteState::None, ' ' | '\t' | '\n' | '|' | '&' | ';' | '>' | '<' | '(' | ')' | '$' | '#' | '=') => {
+                break;
+            }
+            _ => {
+                word.push(c);
+                chars.next();
+            }
         }
-        word.push(c);
-        chars.next();
     }
     TokenType::Word(word)
 }

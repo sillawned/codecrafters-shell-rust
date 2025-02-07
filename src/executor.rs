@@ -2,6 +2,27 @@ use crate::ast::{ASTNode, RedirectMode};
 use crate::builtins;
 use crate::utils::{self, search_cmd};
 
+fn process_argument(arg: &str) -> String {
+    let mut result = String::with_capacity(arg.len());
+    let mut chars = arg.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(next_c) = chars.next() {
+                match next_c {
+                    'n' => result.push('\n'),
+                    't' => result.push('\t'),
+                    'r' => result.push('\r'),
+                    _ => result.push(next_c),
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
 pub fn execute(node: &ASTNode) -> Result<(), String> {
     #[cfg(debug_assertions)]
     println!("Executing: {:?}", node);
@@ -14,7 +35,7 @@ pub fn execute(node: &ASTNode) -> Result<(), String> {
                 let paths = std::env::var("PATH").unwrap();
                 if let Some(cmd_path) = search_cmd(name, &paths) {
                     let mut cmd = std::process::Command::new(cmd_path);
-                    cmd.args(args.iter().map(|arg| arg.replace("\\'", "'").replace("\\\"", "\""))); // Handle escaped single and double quotes
+                    cmd.args(args.iter().map(|arg| process_argument(arg))); // Handle escaped sequences
                     let status = cmd.status().map_err(|e| e.to_string())?;
                     if !status.success() {
                         // return Err(format!("Command failed with status: {}", status));

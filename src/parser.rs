@@ -148,28 +148,46 @@ where
 
     while let Some(token) = tokens.peek() {
         match token {
-            TokenType::Word(word) | TokenType::QuotedString(word) => {
+            TokenType::Word(word) => {
                 if name.is_empty() {
                     name = word.clone();
                 } else {
                     args.push(word.clone());
                 }
-                tokens.next(); // Consume the word or quoted string
+                tokens.next();
+            }
+            TokenType::SingleQuotedString(word) => {
+                let value = word.clone(); // Preserve literal value
+                if name.is_empty() {
+                    name = value;
+                } else {
+                    args.push(value);
+                }
+                tokens.next();
+            }
+            TokenType::DoubleQuotedString(word) => {
+                let value = word.clone(); // May contain escaped characters
+                if name.is_empty() {
+                    name = value;
+                } else {
+                    args.push(value);
+                }
+                tokens.next();
             }
             TokenType::DollarVar(var) => {
                 args.push(format!("${}", var));
-                tokens.next(); // Consume the variable
+                tokens.next();
             }
             TokenType::CommandSubstitution(cmd) => {
                 args.push(format!("$({})", cmd));
-                tokens.next(); // Consume the command substitution
+                tokens.next();
             }
             TokenType::Assignment(var, val) => {
                 args.push(format!("{}={}", var, val));
-                tokens.next(); // Consume the assignment
+                tokens.next();
             }
             TokenType::Comment(_) => {
-                tokens.next(); // Consume the comment
+                tokens.next();
                 break;
             }
             _ => break,
