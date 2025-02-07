@@ -73,7 +73,11 @@ pub fn tokenize(input: &str) -> Vec<TokenType> {
                 tokens.push(TokenType::Newline);
             }
             _ => {
-                tokens.push(tokenize_word(&mut chars));
+                if c.is_digit(10) {
+                    tokens.push(tokenize_file_descriptor(&mut chars));
+                } else {
+                    tokens.push(tokenize_word(&mut chars));
+                }
             }
         }
     }
@@ -193,6 +197,18 @@ fn tokenize_assignment(chars: &mut std::iter::Peekable<std::str::Chars>) -> Toke
         chars.next();
     }
     TokenType::Assignment(var_name, value)
+}
+
+fn tokenize_file_descriptor(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
+    let mut fd = String::new();
+    while let Some(&c) = chars.peek() {
+        if !c.is_digit(10) {
+            break;
+        }
+        fd.push(c);
+        chars.next();
+    }
+    TokenType::FileDescriptor(fd.parse().unwrap())
 }
 
 fn tokenize_word(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
