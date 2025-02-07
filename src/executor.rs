@@ -92,7 +92,10 @@ pub fn execute(node: &ASTNode) -> Result<(), String> {
             execute(left)?;
             execute(right)
         }
-        _ => Err("Unsupported ASTNode".to_string()),
+        #[allow(unreachable_patterns)]
+        _ => {
+            Err("Unsupported ASTNode".to_string())
+        }
     }
 }
 

@@ -1,5 +1,3 @@
-use std::iter::Peekable;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     Word(String),              // Command or argument
@@ -14,8 +12,8 @@ pub enum TokenType {
     LogicalOr,                 // Logical OR (||)
     DollarVar(String),         // Variable expansion, e.g., $HOME
     CommandSubstitution(String), // Command substitution $(command)
-    Quote(char),               // Single or double quotes
-    Escape,                    // Escape character like \
+    // Quote(char),               // Single or double quotes
+    // Escape,                    // Escape character like \
     Newline,                   // Newline character
 }
 
@@ -47,14 +45,14 @@ pub fn tokenize(input: &str) -> Vec<TokenType> {
                         in_quote = false;
                         tokens.push(TokenType::Word(token.clone()));
                         token.clear();
-                        tokens.push(TokenType::Quote(c));
+                        //tokens.push(TokenType::Quote(c));
                     } else {
                         token.push(c);
                     }
                 } else {
                     in_quote = true;
                     quote_char = c;
-                    tokens.push(TokenType::Quote(c));
+                    //tokens.push(TokenType::Quote(c));
                 }
             }
             ' ' | '\t' if !in_quote => {

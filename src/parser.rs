@@ -95,6 +95,10 @@ where
             }
             TokenType::RedirectionOperator(op) => {
                 tokens.next(); // Consume the redirection operator
+                if fd == -1 {
+                    // If no file descriptor was provided, use default values
+                    fd = if op == "<" { 0 } else { 1 };
+                }
                 if let Some(TokenType::Word(file)) = tokens.next() {
                     command = ASTNode::Redirect {
                         command: Box::new(command),
@@ -160,10 +164,10 @@ where
                 args.push(format!("$({})", cmd));
                 tokens.next(); // Consume the command substitution
             }
-            TokenType::Quote(quote) => {
-                args.push(quote.to_string());
-                tokens.next(); // Consume the quote
-            }
+            //TokenType::Quote(quote) => {
+            //    args.push(quote.to_string());
+            //    tokens.next(); // Consume the quote
+            //}
             _ => break,
         }
     }
