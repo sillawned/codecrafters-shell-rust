@@ -1,12 +1,12 @@
-mod ast;
-mod builtins;
-mod executor;
-mod parser;
-mod tokenizer;
-mod utils;
-
 use std::string::String;
 use std::io::{self, Write};
+
+pub mod ast;
+pub mod builtins;
+pub mod executor;
+pub mod parser;
+pub mod tokenizer;
+pub mod utils;
 
 fn main() {
     let stdin = io::stdin();
