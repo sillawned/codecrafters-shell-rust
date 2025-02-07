@@ -3,33 +3,7 @@ use crate::builtins;
 use crate::utils::{self, search_cmd};
 
 fn process_argument(arg: &str) -> String {
-    let mut result = String::with_capacity(arg.len());
-    let mut chars = arg.chars().peekable();
-
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            if let Some(&next_c) = chars.peek() {
-                match next_c {
-                    'n' => result.push('\n'),
-                    't' => result.push('\t'),
-                    'r' => result.push('\r'),
-                    '\\' => result.push('\\'),
-                    '"' => result.push('"'),
-                    '\'' => result.push('\''),
-                    _ => {
-                        result.push('\\');
-                        result.push(next_c);
-                    }
-                }
-                chars.next(); // Consume the escaped character
-            } else {
-                result.push(c);
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    result
+    arg.to_string()
 }
 
 pub fn execute(node: &ASTNode) -> Result<(), String> {
