@@ -14,13 +14,17 @@ pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
                 let mut chars = arg.chars().peekable();
                 while let Some(c) = chars.next() {
                     if c == '\\' {
-                        if let Some(escaped_char) = chars.peek() {
+                        if let Some(&escaped_char) = chars.peek() {
                             match escaped_char {
                                 'n' => output.push('\n'),
                                 't' => output.push('\t'),
                                 '\\' => output.push('\\'),
                                 '"' => output.push('"'),
-                                _ => output.push(c),
+                                '\'' => output.push('\''),
+                                _ => {
+                                    output.push(c);
+                                    output.push(escaped_char);
+                                }
                             }
                             chars.next(); // Consume the escaped character
                         } else {
