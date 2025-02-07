@@ -14,7 +14,7 @@ pub fn execute(node: &ASTNode) -> Result<(), String> {
                 let paths = std::env::var("PATH").unwrap();
                 if let Some(cmd_path) = search_cmd(name, &paths) {
                     let mut cmd = std::process::Command::new(cmd_path);
-                    cmd.args(args.iter().map(|arg| arg.replace("\\'", "'"))); // Handle escaped single quotes
+                    cmd.args(args.iter().map(|arg| arg.replace("\\'", "'").replace("\\\"", "\""))); // Handle escaped single and double quotes
                     let status = cmd.status().map_err(|e| e.to_string())?;
                     if !status.success() {
                         // return Err(format!("Command failed with status: {}", status));
@@ -102,9 +102,6 @@ pub fn execute(node: &ASTNode) -> Result<(), String> {
 fn build_command(node: &ASTNode) -> Result<std::process::Command, String> {
     match node {
         ASTNode::Command { name, args } => {
-            // if utils::is_builtin(name) {
-            //     return Err("Built-in commands cannot be executed as external commands".to_string());
-            // }
             let paths = std::env::var("PATH").unwrap();
             if let Some(cmd_path) = search_cmd(name, &paths) {
                 let mut cmd = std::process::Command::new(cmd_path);
