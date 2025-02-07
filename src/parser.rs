@@ -164,10 +164,6 @@ where
                 args.push(format!("$({})", cmd));
                 tokens.next(); // Consume the command substitution
             }
-            //TokenType::Quote(quote) => {
-            //    args.push(quote.to_string());
-            //    tokens.next(); // Consume the quote
-            //}
             _ => break,
         }
     }
