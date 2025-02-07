@@ -102,9 +102,9 @@ pub fn execute(node: &ASTNode) -> Result<(), String> {
 fn build_command(node: &ASTNode) -> Result<std::process::Command, String> {
     match node {
         ASTNode::Command { name, args } => {
-            if utils::is_builtin(name) {
-                return Err("Built-in commands cannot be executed as external commands".to_string());
-            }
+            // if utils::is_builtin(name) {
+            //     return Err("Built-in commands cannot be executed as external commands".to_string());
+            // }
             let paths = std::env::var("PATH").unwrap();
             if let Some(cmd_path) = search_cmd(name, &paths) {
                 let mut cmd = std::process::Command::new(cmd_path);
