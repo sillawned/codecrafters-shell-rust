@@ -17,7 +17,7 @@ pub fn execute(node: &ASTNode) -> Result<(), String> {
                     cmd.args(args);
                     let status = cmd.status().map_err(|e| e.to_string())?;
                     if !status.success() {
-                        return Err(format!("Command failed with status: {}", status));
+                        // return Err(format!("Command failed with status: {}", status));
                     }
                     Ok(())
                 } else {
@@ -57,7 +57,7 @@ pub fn execute(node: &ASTNode) -> Result<(), String> {
 
             let status = cmd.status().map_err(|e| e.to_string())?;
             if !status.success() {
-                return Err(format!("Redirection failed with status: {}", status));
+                //return Err(format!("Redirection failed with status: {}", status));
             }
             Ok(())
         }
