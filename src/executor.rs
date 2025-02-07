@@ -8,13 +8,22 @@ fn process_argument(arg: &str) -> String {
 
     while let Some(c) = chars.next() {
         if c == '\\' {
-            if let Some(next_c) = chars.next() {
+            if let Some(&next_c) = chars.peek() {
                 match next_c {
                     'n' => result.push('\n'),
                     't' => result.push('\t'),
                     'r' => result.push('\r'),
-                    _ => result.push(next_c),
+                    '\\' => result.push('\\'),
+                    '"' => result.push('"'),
+                    '\'' => result.push('\''),
+                    _ => {
+                        result.push('\\');
+                        result.push(next_c);
+                    }
                 }
+                chars.next(); // Consume the escaped character
+            } else {
+                result.push(c);
             }
         } else {
             result.push(c);

@@ -94,7 +94,7 @@ pub fn tokenize(input: &str) -> Vec<TokenType> {
 }
 
 fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
-    let mut string = String::new();
+    let mut quoted_string = String::new();
     let quote_char = chars.next().unwrap();
     let quote_state = if quote_char == '\'' { QuoteState::Single } else { QuoteState::Double };
 
@@ -105,7 +105,7 @@ fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> T
                 break;
             }
             (QuoteState::Single, _) => {
-                string.push(c);
+                quoted_string.push(c);
                 chars.next();
             }
             (QuoteState::Double, '"') => {
@@ -113,36 +113,32 @@ fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> T
                 break;
             }
             (QuoteState::Double, '\\') => {
-                chars.next(); // consume backslash
-                if let Some(&next_c) = chars.peek() {
-                    match next_c {
-                        '$' | '`' | '"' | '\\' => {
-                            string.push(next_c);
-                            chars.next();
-                        }
-                        '\n' => {
-                            chars.next(); // ignore escaped newline
+                chars.next(); // Consume the backslash
+                if let Some(&escaped_char) = chars.peek() {
+                    match escaped_char {
+                        '\\' | '"' | '$' | '`' | '\n' => {
+                            quoted_string.push(escaped_char);
+                            chars.next(); // Consume the escaped character
                         }
                         _ => {
-                            string.push('\\');
-                            string.push(next_c);
-                            chars.next();
+                            quoted_string.push('\\');
+                            quoted_string.push(escaped_char);
+                            chars.next(); // Consume the escaped character
                         }
                     }
                 }
             }
             (QuoteState::Double, _) => {
-                string.push(c);
+                quoted_string.push(c);
                 chars.next();
             }
-            _ => unreachable!(),
         }
     }
 
-    match quote_state {
-        QuoteState::Single => TokenType::SingleQuotedString(string),
-        QuoteState::Double => TokenType::DoubleQuotedString(string),
-        _ => unreachable!(),
+    if quote_state == QuoteState::Single {
+        TokenType::SingleQuotedString(quoted_string)
+    } else {
+        TokenType::DoubleQuotedString(quoted_string)
     }
 }
 
