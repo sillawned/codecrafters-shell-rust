@@ -21,187 +21,188 @@ pub enum TokenType {
 pub fn tokenize(input: &str) -> Vec<TokenType> {
     let input = input.trim();
     let mut tokens = Vec::new();
-    let mut token = String::new();
-
-    let mut in_quote = false;
-    let mut quote_char = '\0';
-    let mut escape_next = false;
-
     let mut chars = input.chars().peekable();
 
-    while let Some(c) = chars.next() {
-        if escape_next {
-            token.push(c);
-            escape_next = false;
-            continue;
-        }
-
-        match c {
+    while let Some(_) = chars.peek() {
+        match _ {
             '\\' => {
-                escape_next = true;
+                chars.next();
+                if let Some(escaped_char) = chars.next() {
+                    tokens.push(TokenType::Word(escaped_char.to_string()));
+                }
             }
             '\'' | '"' => {
-                let mut quoted_string = String::new();
-                let quote_char = c;
-                while let Some(&next_c) = chars.peek() {
-                    if next_c == '\\' {
-                        chars.next(); // Consume the backslash
-                        if let Some(&escaped_char) = chars.peek() {
-                            quoted_string.push(escaped_char);
-                            chars.next(); // Consume the escaped character
-                        }
-                    } else if next_c == quote_char {
-                        chars.next(); // Consume the closing quote
-                        break;
-                    } else {
-                        quoted_string.push(next_c);
-                        chars.next();
-                    }
-                }
-                tokens.push(TokenType::QuotedString(quoted_string));
+                tokens.push(tokenize_quoted_string(&mut chars));
             }
-            ' ' | '\t' if !in_quote => {
-                if !token.is_empty() {
-                    tokens.push(TokenType::Word(token.clone()));
-                    token.clear();
-                }
+            ' ' | '\t' => {
+                chars.next();
             }
-            '|' if !in_quote => {
-                if !token.is_empty() {
-                    tokens.push(TokenType::Word(token.clone()));
-                    token.clear();
-                }
-                if let Some(&next_c) = chars.peek() {
-                    if next_c == '|' {
-                        chars.next(); // Consume the next same character
-                        tokens.push(TokenType::LogicalOr);
-                    } else {
-                        tokens.push(TokenType::Pipe);
-                    }
-                } else {
-                    tokens.push(TokenType::Pipe);
-                }
+            '|' => {
+                tokens.push(tokenize_pipe(&mut chars));
             }
-            '&' if !in_quote => {
-                if !token.is_empty() {
-                    tokens.push(TokenType::Word(token.clone()));
-                    token.clear();
-                }
-                if let Some(&next_c) = chars.peek() {
-                    if next_c == '&' {
-                        chars.next(); // Consume the next same character
-                        tokens.push(TokenType::LogicalAnd);
-                    } else {
-                        tokens.push(TokenType::Background);
-                    }
-                } else {
-                    tokens.push(TokenType::Background);
-                }
+            '&' => {
+                tokens.push(tokenize_background(&mut chars));
             }
-            ';' if !in_quote => {
-                if !token.is_empty() {
-                    tokens.push(TokenType::Word(token.clone()));
-                    token.clear();
-                }
+            ';' => {
+                chars.next();
                 tokens.push(TokenType::Semicolon);
             }
-            '>' | '<' if !in_quote => {
-                if !token.is_empty() {
-                    if let Ok(fd) = token.parse::<i32>() {
-                        tokens.push(TokenType::FileDescriptor(fd));
-                        token.clear();
-                    } else {
-                        tokens.push(TokenType::Word(token.clone()));
-                        token.clear();
-                    }
-                }
-                let operator = if c == '>' && chars.peek() == Some(&'>') {
-                    chars.next(); // Consume the next '>'
-                    ">>".to_string()
-                } else {
-                    c.to_string()
-                };
-                tokens.push(TokenType::RedirectionOperator(operator));
+            '>' | '<' => {
+                tokens.push(tokenize_redirection(&mut chars));
             }
-            '(' if !in_quote => {
-                if !token.is_empty() {
-                    tokens.push(TokenType::Word(token.clone()));
-                    token.clear();
-                }
+            '(' => {
+                chars.next();
                 tokens.push(TokenType::LeftParen);
             }
-            ')' if !in_quote => {
-                if !token.is_empty() {
-                    tokens.push(TokenType::Word(token.clone()));
-                    token.clear();
-                }
+            ')' => {
+                chars.next();
                 tokens.push(TokenType::RightParen);
             }
-            '$' if !in_quote => {
-                if !token.is_empty() {
-                    tokens.push(TokenType::Word(token.clone()));
-                    token.clear();
-                }
-                if chars.peek() == Some(&'(') {
-                    chars.next();
-                    let mut cmd = String::new();
-                    while let Some(&c) = chars.peek() {
-                        if c == ')' {
-                            break;
-                        }
-                        cmd.push(c);
-                        chars.next();
-                    }
-                    chars.next(); // Consume the closing ')'
-                    tokens.push(TokenType::CommandSubstitution(cmd));
-                } else {
-                    let mut var = String::new();
-                    while let Some(&c) = chars.peek() {
-                        if !c.is_alphanumeric() && c != '_' {
-                            break;
-                        }
-                        var.push(c);
-                        chars.next();
-                    }
-                    tokens.push(TokenType::DollarVar(var));
-                }
+            '$' => {
+                tokens.push(tokenize_dollar(&mut chars));
             }
-            '#' if !in_quote => {
-                let comment: String = chars.collect();
-                tokens.push(TokenType::Comment(comment));
+            '#' => {
+                tokens.push(tokenize_comment(&mut chars));
                 break;
             }
-            '=' if !in_quote => {
-                if !token.is_empty() {
-                    let var_name = token.clone();
-                    token.clear();
-                    while let Some(&c) = chars.peek() {
-                        if c == ' ' || c == '\t' || c == '\n' {
-                            break;
-                        }
-                        token.push(c);
-                        chars.next();
-                    }
-                    tokens.push(TokenType::Assignment(var_name, token.clone()));
-                    token.clear();
-                }
+            '=' => {
+                tokens.push(tokenize_assignment(&mut chars));
             }
             '\n' => {
-                if !token.is_empty() {
-                    tokens.push(TokenType::Word(token.clone()));
-                    token.clear();
-                }
+                chars.next();
                 tokens.push(TokenType::Newline);
             }
             _ => {
-                token.push(c);
+                tokens.push(tokenize_word(&mut chars));
             }
         }
     }
 
-    if !token.is_empty() {
-        tokens.push(TokenType::Word(token));
-    }
-
     tokens
+}
+
+fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
+    let mut quoted_string = String::new();
+    let quote_char = chars.next().unwrap();
+    while let Some(&next_c) = chars.peek() {
+        if next_c == '\\' {
+            chars.next(); // Consume the backslash
+            if let Some(&escaped_char) = chars.peek() {
+                quoted_string.push(escaped_char);
+                chars.next(); // Consume the escaped character
+            }
+        } else if next_c == quote_char {
+            chars.next(); // Consume the closing quote
+            break;
+        } else {
+            quoted_string.push(next_c);
+            chars.next();
+        }
+    }
+    TokenType::QuotedString(quoted_string)
+}
+
+fn tokenize_pipe(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
+    chars.next(); // Consume the "|"
+    if let Some(&next_c) = chars.peek() {
+        if next_c == '|' {
+            chars.next(); // Consume the next "|"
+            TokenType::LogicalOr
+        } else {
+            TokenType::Pipe
+        }
+    } else {
+        TokenType::Pipe
+    }
+}
+
+fn tokenize_background(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
+    chars.next(); // Consume the "&"
+    if let Some(&next_c) = chars.peek() {
+        if next_c == '&' {
+            chars.next(); // Consume the next "&"
+            TokenType::LogicalAnd
+        } else {
+            TokenType::Background
+        }
+    } else {
+        TokenType::Background
+    }
+}
+
+fn tokenize_redirection(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
+    let operator = chars.next().unwrap();
+    let operator = if operator == '>' && chars.peek() == Some(&'>') {
+        chars.next(); // Consume the next ">"
+        ">>".to_string()
+    } else {
+        operator.to_string()
+    };
+    TokenType::RedirectionOperator(operator)
+}
+
+fn tokenize_dollar(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
+    chars.next(); // Consume the "$"
+    if chars.peek() == Some(&'(') {
+        chars.next(); // Consume the "("
+        let mut cmd = String::new();
+        while let Some(&c) = chars.peek() {
+            if c == ')' {
+                break;
+            }
+            cmd.push(c);
+            chars.next();
+        }
+        chars.next(); // Consume the closing ")"
+        TokenType::CommandSubstitution(cmd)
+    } else {
+        let mut var = String::new();
+        while let Some(&c) = chars.peek() {
+            if !c.is_alphanumeric() && c != '_' {
+                break;
+            }
+            var.push(c);
+            chars.next();
+        }
+        TokenType::DollarVar(var)
+    }
+}
+
+fn tokenize_comment(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
+    chars.next(); // Consume the "#"
+    let comment: String = chars.collect();
+    TokenType::Comment(comment)
+}
+
+fn tokenize_assignment(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
+    let mut var_name = String::new();
+    while let Some(&c) = chars.peek() {
+        if c == '=' {
+            chars.next(); // Consume the "="
+            break;
+        }
+        var_name.push(c);
+        chars.next();
+    }
+    let mut value = String::new();
+    while let Some(&c) = chars.peek() {
+        if c == ' ' || c == '\t' || c == '\n' {
+            break;
+        }
+        value.push(c);
+        chars.next();
+    }
+    TokenType::Assignment(var_name, value)
+}
+
+fn tokenize_word(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
+    let mut word = String::new();
+    while let Some(&c) = chars.peek() {
+        if c == ' ' || c == '\t' || c == '\n' || c == '|' || c == '&' || c == ';' || c == '>' || c == '<' || c == '(' || c == ')' || c == '$' || c == '#' || c == '=' {
+            break;
+        }
+        word.push(c);
+        chars.next();
+    }
+    TokenType::Word(word)
 }
