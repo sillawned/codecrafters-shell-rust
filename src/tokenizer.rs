@@ -96,7 +96,7 @@ fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> T
                 break;
             }
             quoted_string.push(next_c);
-            chars.next();
+            chars.next(); // Consume the character inside the quotes
         }
     } else {
         // Double-quoted string: allow escape sequences and variable expansion
@@ -105,7 +105,7 @@ fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> T
                 chars.next(); // Consume the backslash
                 if let Some(&escaped_char) = chars.peek() {
                     match escaped_char {
-                        '\\' | '"' | '$' | '`' => {
+                        '\\' | '"' | '$' | '`' | '\n' => {
                             quoted_string.push(escaped_char);
                             chars.next(); // Consume the escaped character
                         }
@@ -121,7 +121,7 @@ fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> T
                 break;
             } else {
                 quoted_string.push(next_c);
-                chars.next();
+                chars.next(); // Consume the character inside the quotes
             }
         }
     }
