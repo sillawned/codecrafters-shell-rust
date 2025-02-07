@@ -1,6 +1,6 @@
 use crate::ast::{ASTNode, RedirectMode};
 use crate::builtins::{self, BUILTINS};
-use crate::utils::search_cmd;
+use crate::utils::{self, search_cmd};
 
 pub fn execute(node: &ASTNode) -> Result<(), String> {
     #[cfg(debug_assertions)]
@@ -8,13 +8,13 @@ pub fn execute(node: &ASTNode) -> Result<(), String> {
 
     match node {
         ASTNode::Command { name, args } => {
-            if BUILTINS.contains(&name.as_str()) {
+            if utils::is_builtin(name) {
                 builtins::execute_builtin(name, args)
             } else {
                 let paths = std::env::var("PATH").unwrap();
                 if let Some(cmd_path) = search_cmd(name, &paths) {
                     let mut cmd = std::process::Command::new(cmd_path);
-                    cmd.args(args);
+                    cmd.args(args.iter().map(|arg| arg.replace("\\'", "'"))); // Handle escaped single quotes
                     let status = cmd.status().map_err(|e| e.to_string())?;
                     if !status.success() {
                         // return Err(format!("Command failed with status: {}", status));
@@ -102,6 +102,9 @@ pub fn execute(node: &ASTNode) -> Result<(), String> {
 fn build_command(node: &ASTNode) -> Result<std::process::Command, String> {
     match node {
         ASTNode::Command { name, args } => {
+            if utils::is_builtin(name) {
+                return Err("Built-in commands cannot be executed as external commands".to_string());
+            }
             let paths = std::env::var("PATH").unwrap();
             if let Some(cmd_path) = search_cmd(name, &paths) {
                 let mut cmd = std::process::Command::new(cmd_path);

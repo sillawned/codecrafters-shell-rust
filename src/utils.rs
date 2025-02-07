@@ -9,3 +9,7 @@ pub fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
     }
     None
 }
+
+pub fn is_builtin(cmd: &str) -> bool {
+    crate::builtins::BUILTINS.contains(&cmd)
+}

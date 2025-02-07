@@ -148,13 +148,13 @@ where
 
     while let Some(token) = tokens.peek() {
         match token {
-            TokenType::Word(word) => {
+            TokenType::Word(word) | TokenType::QuotedString(word) => {
                 if name.is_empty() {
                     name = word.clone();
                 } else {
                     args.push(word.clone());
                 }
-                tokens.next(); // Consume the word
+                tokens.next(); // Consume the word or quoted string
             }
             TokenType::DollarVar(var) => {
                 args.push(format!("${}", var));

@@ -15,6 +15,7 @@ pub enum TokenType {
     Comment(String),            // Comment starting with #
     Assignment(String, String), // Variable assignment, e.g., VAR=value
     Newline,                   // Newline character
+    QuotedString(String),      // Quoted strings
 }
 
 pub fn tokenize(input: &str) -> Vec<TokenType> {
@@ -40,18 +41,17 @@ pub fn tokenize(input: &str) -> Vec<TokenType> {
                 escape_next = true;
             }
             '\'' | '"' => {
-                if in_quote {
-                    if c == quote_char {
-                        in_quote = false;
-                        tokens.push(TokenType::Word(token.clone()));
-                        token.clear();
-                    } else {
-                        token.push(c);
+                let mut quoted_string = String::new();
+                let quote_char = c;
+                while let Some(&next_c) = chars.peek() {
+                    if next_c == quote_char {
+                        chars.next(); // Consume the closing quote
+                        break;
                     }
-                } else {
-                    in_quote = true;
-                    quote_char = c;
+                    quoted_string.push(next_c);
+                    chars.next();
                 }
+                tokens.push(TokenType::QuotedString(quoted_string));
             }
             ' ' | '\t' if !in_quote => {
                 if !token.is_empty() {
