@@ -100,10 +100,6 @@ fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> T
 
     while let Some(&c) = chars.peek() {
         match (quote_state, c) {
-            (QuoteState::None, _) => {
-                quoted_string.push(c);
-                chars.next();
-            }
             (QuoteState::Single, '\'') => {
                 chars.next();
                 break;
@@ -266,6 +262,46 @@ fn tokenize_word(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType 
             }
             (QuoteState::None, ' ' | '\t' | '\n' | '|' | '&' | ';' | '>' | '<' | '(' | ')' | '$' | '#' | '=') => {
                 break;
+            }
+            (QuoteState::None, '\'') => {
+                quote_state = QuoteState::Single;
+                chars.next();
+            }
+            (QuoteState::None, '"') => {
+                quote_state = QuoteState::Double;
+                chars.next();
+            }
+            (QuoteState::Single, '\'') => {
+                quote_state = QuoteState::None;
+                chars.next();
+            }
+            (QuoteState::Single, _) => {
+                word.push(c);
+                chars.next();
+            }
+            (QuoteState::Double, '"') => {
+                quote_state = QuoteState::None;
+                chars.next();
+            }
+            (QuoteState::Double, '\\') => {
+                chars.next(); // Consume the backslash
+                if let Some(&escaped_char) = chars.peek() {
+                    match escaped_char {
+                        '\\' | '"' | '$' | '`' | '\n' => {
+                            word.push(escaped_char);
+                            chars.next(); // Consume the escaped character
+                        }
+                        _ => {
+                            word.push('\\');
+                            word.push(escaped_char);
+                            chars.next(); // Consume the escaped character
+                        }
+                    }
+                }
+            }
+            (QuoteState::Double, _) => {
+                word.push(c);
+                chars.next();
             }
             _ => {
                 word.push(c);
