@@ -70,6 +70,15 @@ pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
             // Implement wait functionality
             Ok(())
         }
+        _ if name.contains('=') => {
+            let parts: Vec<&str> = name.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                env::set_var(parts[0], parts[1]);
+                Ok(())
+            } else {
+                Err(format!("Invalid assignment: {}", name))
+            }
+        }
         _ => Err(format!("Unknown builtin: {}", name)),
     }
 }

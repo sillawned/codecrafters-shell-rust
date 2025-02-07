@@ -12,8 +12,8 @@ pub enum TokenType {
     LogicalOr,                 // Logical OR (||)
     DollarVar(String),         // Variable expansion, e.g., $HOME
     CommandSubstitution(String), // Command substitution $(command)
-    // Quote(char),               // Single or double quotes
-    // Escape,                    // Escape character like \
+    Comment(String),            // Comment starting with #
+    Assignment(String, String), // Variable assignment, e.g., VAR=value
     Newline,                   // Newline character
 }
 
@@ -157,6 +157,26 @@ pub fn tokenize(input: &str) -> Vec<TokenType> {
                         chars.next();
                     }
                     tokens.push(TokenType::DollarVar(var));
+                }
+            }
+            '#' if !in_quote => {
+                let comment: String = chars.collect();
+                tokens.push(TokenType::Comment(comment));
+                break;
+            }
+            '=' if !in_quote => {
+                if !token.is_empty() {
+                    let var_name = token.clone();
+                    token.clear();
+                    while let Some(&c) = chars.peek() {
+                        if c == ' ' || c == '\t' || c == '\n' {
+                            break;
+                        }
+                        token.push(c);
+                        chars.next();
+                    }
+                    tokens.push(TokenType::Assignment(var_name, token.clone()));
+                    token.clear();
                 }
             }
             '\n' => {

@@ -32,6 +32,10 @@ pub enum ASTNode {
         left: Box<ASTNode>,
         right: Box<ASTNode>,
     },
+    Assignment {
+        var: String,
+        val: String,
+    },
 }
 
 #[derive(Debug)]

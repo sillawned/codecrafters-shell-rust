@@ -164,6 +164,14 @@ where
                 args.push(format!("$({})", cmd));
                 tokens.next(); // Consume the command substitution
             }
+            TokenType::Assignment(var, val) => {
+                args.push(format!("{}={}", var, val));
+                tokens.next(); // Consume the assignment
+            }
+            TokenType::Comment(_) => {
+                tokens.next(); // Consume the comment
+                break;
+            }
             _ => break,
         }
     }
