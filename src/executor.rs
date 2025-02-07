@@ -1,5 +1,5 @@
 use crate::ast::{ASTNode, RedirectMode};
-use crate::builtins::{self, BUILTINS};
+use crate::builtins;
 use crate::utils::{self, search_cmd};
 
 pub fn execute(node: &ASTNode) -> Result<(), String> {
