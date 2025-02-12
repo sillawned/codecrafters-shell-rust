@@ -101,15 +101,15 @@ fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> T
     while let Some(&c) = chars.peek() {
         match (quote_state, c) {
             (QuoteState::Single, '\'') => {
-                chars.next();
+                chars.next(); // Consumte the closing single quote
                 break;
             }
             (QuoteState::Single, _) => {
                 quoted_string.push(c);
-                chars.next();
+                chars.next(); // Consume the character inside the single quotes
             }
             (QuoteState::Double, '"') => {
-                chars.next();
+                chars.next(); // Consumte the closing double quote
                 break;
             }
             (QuoteState::Double, '\\') => {
@@ -132,6 +132,7 @@ fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> T
                 quoted_string.push(c);
                 chars.next();
             }
+            _ => unreachable!()
         }
     }
 
