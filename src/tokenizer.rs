@@ -17,6 +17,7 @@ pub enum TokenType {
     Newline,                   // Newline character
     SingleQuotedString(String), // Single-quoted strings
     DoubleQuotedString(String), // Double-quoted strings
+    Space,                     // Space character
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,6 +45,7 @@ pub fn tokenize(input: &str) -> Vec<TokenType> {
             }
             ' ' | '\t' => {
                 chars.next();
+                tokens.push(TokenType::Space);
             }
             '|' => {
                 tokens.push(tokenize_pipe(&mut chars));
@@ -103,6 +105,13 @@ fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> T
             (QuoteState::Single, '\'') => {
                 chars.next(); // Consume the closing single quote
                 break;
+            }
+            (QuoteState::Single, '\\') => {
+                chars.next(); // Consume the backslash
+                if let Some(&escaped_char) = chars.peek() {
+                    quoted_string.push(escaped_char);
+                    chars.next(); // Consume the escaped character
+                }
             }
             (QuoteState::Single, _) => {
                 quoted_string.push(c);

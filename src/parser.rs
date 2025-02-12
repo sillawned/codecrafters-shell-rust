@@ -133,6 +133,9 @@ where
                     return Err("Expected closing parenthesis for subshell".to_string());
                 }
             }
+            TokenType::Space => {
+                tokens.next(); // Consume the space
+            }
             _ => break,
         }
     }
@@ -189,6 +192,9 @@ where
             TokenType::Comment(_) => {
                 tokens.next();
                 break;
+            }
+            TokenType::Space => {
+                tokens.next(); // Consume the space
             }
             _ => break,
         }
