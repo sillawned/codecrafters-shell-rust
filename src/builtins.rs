@@ -9,7 +9,7 @@ pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
     match name {
         "exit" => std::process::exit(args.get(0).and_then(|s| s.parse().ok()).unwrap_or(0)),
         "echo" => {
-            println!("{}", args.join(" "));
+            println!("{}", args.join(""));
             Ok(())
         }
         "pwd" => {
