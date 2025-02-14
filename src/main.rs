@@ -16,15 +16,21 @@ pub mod lexer;
 fn main() {
     let stdin = io::stdin();
     let mut input = String::new();
-
     let mut last_status = ExitStatus::from_raw(0);
 
     loop {
+        // Print prompt and ensure it's displayed immediately
         print!("$ ");
         io::stdout().flush().unwrap();
 
+        input.clear();  // Clear before reading new input
         if stdin.read_line(&mut input).is_err() {
             eprintln!("Error reading input");
+            continue;
+        }
+
+        // Skip empty lines but still show prompt
+        if input.trim().is_empty() {
             continue;
         }
 
