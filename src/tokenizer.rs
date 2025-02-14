@@ -106,19 +106,13 @@ fn tokenize_quoted_string(chars: &mut std::iter::Peekable<std::str::Chars>) -> T
                 chars.next(); // Consume the closing single quote
                 break;
             }
-            (QuoteState::Single, '\\') => {
-                chars.next(); // Consume the backslash
-                if let Some(&escaped_char) = chars.peek() {
-                    quoted_string.push(escaped_char);
-                    chars.next(); // Consume the escaped character
-                }
-            }
             (QuoteState::Single, _) => {
+                // In single quotes, treat everything literally, including backslashes
                 quoted_string.push(c);
-                chars.next(); // Consume the character inside the single quotes
+                chars.next();
             }
             (QuoteState::Double, '"') => {
-                chars.next(); // Consume the closing double quote
+                chars.next();
                 break;
             }
             (QuoteState::Double, '\\') => {

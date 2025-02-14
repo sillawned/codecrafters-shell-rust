@@ -106,7 +106,9 @@ pub fn execute(node: &ASTNode) -> Result<ExitStatus, String> {
 fn build_command(node: &ASTNode) -> Result<std::process::Command, String> {
     match node {
         ASTNode::Command { name, args } => {
-            let paths = std::env::var("PATH").unwrap();
+            let paths = std::env::var("PATH").unwrap_or_default();
+            
+            // Try exact path match first
             if let Some(cmd_path) = search_cmd(name, &paths) {
                 let mut cmd = std::process::Command::new(cmd_path);
                 cmd.args(args);
