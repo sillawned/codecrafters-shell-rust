@@ -30,12 +30,14 @@ impl<'a> Parser<'a> {
 
     fn parse_command(&mut self) -> Result<ASTNode, String> {
         let mut words = Vec::new();
-        let mut redirects = Vec::new();
         
         while let Some(token) = self.current_token() {
             match token {
                 Token::Word(word) => {
                     words.push(word.clone());
+                    self.advance();
+                },
+                Token::Space => {
                     self.advance();
                 },
                 Token::Quote(quote_type) => {
@@ -59,8 +61,19 @@ impl<'a> Parser<'a> {
                 Token::Operator(Operator::RedirectOut) => {
                     self.advance();
                     if let Some(Token::Word(file)) = self.current_token() {
-                        redirects.push((1, RedirectMode::Overwrite, file.clone()));
-                        self.advance();
+                        if words.is_empty() {
+                            return Err("No command before redirection".to_string());
+                        }
+                        let command = ASTNode::Command {
+                            name: words[0].clone(),
+                            args: words[1..].to_vec(),
+                        };
+                        return Ok(ASTNode::Redirect {
+                            command: Box::new(command),
+                            fd: 1,
+                            file: file.clone(),
+                            mode: RedirectMode::Overwrite,
+                        });
                     } else {
                         return Err("Expected filename after redirection".to_string());
                     }
@@ -87,21 +100,9 @@ impl<'a> Parser<'a> {
             return Err("Empty command".to_string());
         }
 
-        let mut command = ASTNode::Command {
-            name: words.remove(0),
-            args: words,
-        };
-
-        // Apply redirections in order
-        for (fd, mode, file) in redirects {
-            command = ASTNode::Redirect {
-                command: Box::new(command),
-                fd,
-                file,
-                mode,
-            };
-        }
-
-        Ok(command)
+        Ok(ASTNode::Command {
+            name: words[0].clone(),
+            args: words[1..].to_vec(),
+        })
     }
 }

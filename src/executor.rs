@@ -64,10 +64,14 @@ impl Executor {
                         }
                     }
                 } else if let Some(cmd_path) = search_cmd(name, &paths) {
-                    let mut cmd = std::process::Command::new(cmd_path);
+                    let mut cmd = std::process::Command::new(&cmd_path);
                     let processed_args: Vec<String> = expanded_args.iter()
                         .map(|arg| process_text(arg, ProcessingMode::Argument))
                         .collect();
+                    
+                    #[cfg(debug_assertions)]
+                    println!("Executing command: {} with args: {:?}", cmd_path, processed_args);
+                    
                     cmd.args(&processed_args);
                     execute_command(&mut cmd)
                 } else {
@@ -83,37 +87,41 @@ impl Executor {
                     std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
                 }
 
-                // Create/open the file for redirection
-                let file = match std::fs::OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .append(matches!(mode, RedirectMode::Append))
-                    .truncate(matches!(mode, RedirectMode::Overwrite))
-                    .open(&expanded_file)
-                {
-                    Ok(file) => file,
-                    Err(e) => return Err(format!("Failed to open {}: {}", expanded_file, e))
-                };
-
                 // Execute the command with redirection
                 match &**command {
                     ASTNode::Command { name, args } => {
-                        let mut cmd = match search_cmd(name, &std::env::var("PATH").unwrap_or_default()) {
-                            Some(path) => std::process::Command::new(path),
-                            None => return Err(format!("{}: command not found", name))
+                        // First expand any variables in the arguments
+                        let expanded_args: Vec<String> = args.iter()
+                            .map(|arg| self.expand_variables(arg))
+                            .collect::<Result<_, _>>()?;
+
+                        let mut cmd = if utils::is_builtin(name) {
+                            return Err("Redirection not supported for builtins".to_string());
+                        } else if let Some(cmd_path) = search_cmd(name, &std::env::var("PATH").unwrap_or_default()) {
+                            let mut cmd = std::process::Command::new(cmd_path);
+                            cmd.args(&expanded_args);
+                            cmd
+                        } else {
+                            return Err(format!("{}: command not found", name));
                         };
 
-                        cmd.args(args);
+                        // Set up the redirection
+                        let file = std::fs::OpenOptions::new()
+                            .write(true)
+                            .create(true)
+                            .truncate(true)
+                            .open(&expanded_file)
+                            .map_err(|e| format!("Failed to open {}: {}", expanded_file, e))?;
 
                         match *fd {
-                            1 => cmd.stdout(file),
-                            2 => cmd.stderr(file),
-                            _ => return Err(format!("Invalid file descriptor: {}", fd))
-                        };
+                            1 => { cmd.stdout(file); }
+                            2 => { cmd.stderr(file); }
+                            _ => return Err(format!("Invalid file descriptor: {}", fd)),
+                        }
 
                         execute_command(&mut cmd)
                     },
-                    _ => Err("Invalid command for redirection".to_string())
+                    _ => Err("Invalid command for redirection".to_string()),
                 }
             },
             ASTNode::Pipe { left, right } => {

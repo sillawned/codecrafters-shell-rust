@@ -47,13 +47,16 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn next_token(&mut self) -> Option<Token> {
+        self.consume_whitespace(); // Skip leading whitespace
+
         while let Some(c) = self.current {
             match c {
                 ' ' | '\t' => {
-                    self.advance(); // Just advance past the space
-                    // Only return Space token if we haven't reached the end
-                    if self.current.is_some() {
-                        return Some(Token::Space);
+                    self.advance();
+                    if let Some(next_c) = self.current {
+                        if !matches!(next_c, ' ' | '\t' | '\n') {
+                            return Some(Token::Space);
+                        }
                     }
                 }
                 '\n' => {
@@ -73,39 +76,11 @@ impl<'a> Lexer<'a> {
 
     fn read_word(&mut self) -> String {
         let mut word = String::new();
-        let mut in_quotes = false;
-        let mut quote_char = None;
-        let mut escaped = false;
-
+        
         while let Some(c) = self.current {
-            match (c, escaped, in_quotes) {
-                (c, true, _) => {
-                    // Handle escaped characters
-                    match c {
-                        'n' => word.push('\n'),
-                        't' => word.push('\t'),
-                        'r' => word.push('\r'),
-                        _ => word.push(c),
-                    }
-                    escaped = false;
-                    self.advance();
-                },
-                ('\\', false, _) => {
-                    escaped = true;
-                    self.advance();
-                },
-                ('"' | '\'', false, false) => {
-                    in_quotes = true;
-                    quote_char = Some(c);
-                    self.advance();
-                },
-                (c, false, true) if Some(c) == quote_char => {
-                    in_quotes = false;
-                    quote_char = None;
-                    self.advance();
-                },
-                (' ' | '\t' | '\n' | '|' | '&' | '>' | '<' | ';', false, false) => break,
-                (_, false, _) => {
+            match c {
+                ' ' | '\t' | '\n' | '|' | '&' | '>' | '<' | ';' => break,
+                _ => {
                     word.push(c);
                     self.advance();
                 }
