@@ -8,14 +8,21 @@ pub enum ProcessingMode {
 
 pub fn process_text(text: &str, mode: ProcessingMode) -> String {
     let mut result = String::new();
-    let processed_text = if (text.starts_with('\'') && text.ends_with('\'')) ||
-                           (text.starts_with('"') && text.ends_with('"')) {
-        &text[1..text.len()-1]
-    } else {
-        text
+    
+    // Strip outer quotes if they exist
+    let text = match mode {
+        ProcessingMode::Argument => {
+            if (text.starts_with('\'') && text.ends_with('\'')) ||
+               (text.starts_with('"') && text.ends_with('"')) {
+                &text[1..text.len()-1]
+            } else {
+                text
+            }
+        },
+        _ => text
     };
     
-    let mut chars = processed_text.chars().peekable();
+    let mut chars = text.chars().peekable();
     let mut in_single_quote = false;
     let mut in_double_quote = false;
     

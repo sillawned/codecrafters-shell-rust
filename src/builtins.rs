@@ -1,5 +1,8 @@
 use std::{env, path::Path};
-use crate::utils::search_cmd;
+use crate::{
+    utils::search_cmd,
+    processor::{process_text, ProcessingMode},
+};
 
 pub const BUILTINS: [&str; 15] = [
     "exit", "echo", "type", "pwd", "cd", "alias", "unalias", "export", "unset", "history", "jobs", "fg", "bg", "kill", "wait"
@@ -17,7 +20,11 @@ pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
             if args.is_empty() {
                 println!();
             } else {
-                println!("{}", args.join(" "));
+                // Process each argument to remove quotes
+                let processed_args: Vec<String> = args.iter()
+                    .map(|arg| process_text(arg, ProcessingMode::Argument))
+                    .collect();
+                println!("{}", processed_args.join(" "));
             }
             Ok(())
         }
