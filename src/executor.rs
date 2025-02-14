@@ -7,19 +7,32 @@ use std::os::unix::process::ExitStatusExt;
 fn process_argument(arg: &str) -> String {
     let mut result = String::new();
     let mut chars = arg.chars().peekable();
+    let mut in_quotes = false;
     
     while let Some(c) = chars.next() {
         match c {
+            '\'' => {
+                in_quotes = !in_quotes;
+                result.push(c);
+            }
             '\\' => {
-                if let Some(next) = chars.next() {
-                    match next {
-                        ' ' => result.push(' '),
-                        '\\' => result.push('\\'),
-                        '\'' => result.push('\''),
-                        '"' => result.push('"'),
-                        _ => {
-                            result.push('\\');
-                            result.push(next);
+                if in_quotes {
+                    // Inside quotes, preserve backslash and next character literally
+                    result.push('\\');
+                    if let Some(next) = chars.next() {
+                        result.push(next);
+                    }
+                } else {
+                    // Outside quotes, interpret escaped characters
+                    if let Some(next) = chars.next() {
+                        match next {
+                            'n' => result.push('\n'),
+                            't' => result.push('\t'),
+                            '\\' => result.push('\\'),
+                            _ => {
+                                result.push('\\');
+                                result.push(next);
+                            }
                         }
                     }
                 }
@@ -131,12 +144,13 @@ fn build_command(node: &ASTNode) -> Result<std::process::Command, String> {
             let paths = std::env::var("PATH").unwrap_or_default();
             
             // Try exact path match first
-            if let Some(cmd_path) = search_cmd(name, &paths) {
+            let processed_name = process_argument(name);
+            if let Some(cmd_path) = search_cmd(&processed_name, &paths) {
                 let mut cmd = std::process::Command::new(cmd_path);
-                cmd.args(args);
+                cmd.args(args.iter().map(|arg| process_argument(arg)));
                 Ok(cmd)
             } else {
-                Err(format!("{}: command not found", name))
+                Err(format!("{}: command not found", processed_name))
             }
         }
         _ => Err("Unsupported ASTNode for command building".to_string()),
