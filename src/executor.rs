@@ -11,33 +11,6 @@ pub struct Executor {
     current_dir: std::path::PathBuf,
 }
 
-fn process_argument(arg: &str) -> String {
-    let mut result = String::new();
-    let mut chars = arg.chars().peekable();
-    let mut in_quotes = false;
-
-    while let Some(c) = chars.next() {
-        match c {
-            '"' => {
-                in_quotes = !in_quotes;
-                continue;  // Skip the quote character
-            }
-            '\\' if !in_quotes => {
-                if let Some(next) = chars.next() {
-                    match next {
-                        'n' => result.push('\n'),
-                        't' => result.push('\t'),
-                        'r' => result.push('\r'),
-                        _ => result.push(next),
-                    }
-                }
-            }
-            _ => result.push(c),
-        }
-    }
-    result
-}
-
 fn execute_command(cmd: &mut std::process::Command) -> Result<ExitStatus, String> {
     // Set up process group
     unsafe {
@@ -81,7 +54,7 @@ impl Executor {
             
                 if utils::is_builtin(name) {
                     let processed_args: Vec<String> = expanded_args.iter()
-                        .map(|arg| process_argument(arg))
+                        .map(|arg| process_text(arg, ProcessingMode::Argument))
                         .collect();
                     match builtins::execute_builtin(name, &processed_args) {
                         Ok(()) => Ok(ExitStatus::from_raw(0)),
@@ -93,7 +66,7 @@ impl Executor {
                 } else if let Some(cmd_path) = search_cmd(name, &paths) {
                     let mut cmd = std::process::Command::new(cmd_path);
                     let processed_args: Vec<String> = expanded_args.iter()
-                        .map(|arg| process_argument(arg))
+                        .map(|arg| process_text(arg, ProcessingMode::Argument))
                         .collect();
                     cmd.args(&processed_args);
                     execute_command(&mut cmd)
@@ -103,61 +76,45 @@ impl Executor {
                 }
             }
             ASTNode::Redirect { command, fd, file, mode } => {
-                let mut cmd = match &**command {
-                    ASTNode::Command { name, args } => {
-                        let paths = std::env::var("PATH").unwrap_or_default();
-                        if let Some(cmd_path) = search_cmd(name, &paths) {
-                            let mut cmd = std::process::Command::new(&cmd_path);
-                            cmd.args(args);
-                            cmd
-                        } else {
-                            eprintln!("{}: command not found", name);
-                            return Ok(ExitStatus::from_raw(127));
-                        }
-                    },
-                    _ => return Err("Invalid redirection".to_string()),
-                };
+                let expanded_file = self.expand_variables(file)?;
+                
+                // Create parent directories if they don't exist
+                if let Some(parent) = std::path::Path::new(&expanded_file).parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                }
 
-                // Try to open the file for redirection
+                // Create/open the file for redirection
                 let file = match std::fs::OpenOptions::new()
                     .write(true)
                     .create(true)
                     .append(matches!(mode, RedirectMode::Append))
-                    .truncate(!matches!(mode, RedirectMode::Append))
-                    .open(file)
+                    .truncate(matches!(mode, RedirectMode::Overwrite))
+                    .open(&expanded_file)
                 {
                     Ok(file) => file,
-                    Err(e) => {
-                        match e.kind() {
-                            std::io::ErrorKind::NotFound => {
-                                if let Some(parent) = std::path::Path::new(file).parent() {
-                                    eprintln!("cannot create {}: No such file or directory", parent.display());
-                                } else {
-                                    eprintln!("cannot create {}: No such file or directory", file);
-                                }
-                                return Ok(ExitStatus::from_raw(1));
-                            },
-                            std::io::ErrorKind::PermissionDenied => {
-                                eprintln!("cannot create {}: Permission denied", file);
-                                return Ok(ExitStatus::from_raw(1));
-                            },
-                            _ => {
-                                eprintln!("{}", e);
-                                return Ok(ExitStatus::from_raw(1));
-                            }
-                        }
-                    }
-                };
-
-                // Set up the redirection
-                match fd {
-                    1 => cmd.stdout(file),
-                    2 => cmd.stderr(file),
-                    _ => return Err(format!("Bad file descriptor: {}", fd)),
+                    Err(e) => return Err(format!("Failed to open {}: {}", expanded_file, e))
                 };
 
                 // Execute the command with redirection
-                execute_command(&mut cmd)
+                match &**command {
+                    ASTNode::Command { name, args } => {
+                        let mut cmd = match search_cmd(name, &std::env::var("PATH").unwrap_or_default()) {
+                            Some(path) => std::process::Command::new(path),
+                            None => return Err(format!("{}: command not found", name))
+                        };
+
+                        cmd.args(args);
+
+                        match *fd {
+                            1 => cmd.stdout(file),
+                            2 => cmd.stderr(file),
+                            _ => return Err(format!("Invalid file descriptor: {}", fd))
+                        };
+
+                        execute_command(&mut cmd)
+                    },
+                    _ => Err("Invalid command for redirection".to_string())
+                }
             },
             ASTNode::Pipe { left, right } => {
                 // Preserve exit status of the rightmost command in a pipeline

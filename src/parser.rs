@@ -2,164 +2,106 @@ use crate::ast::{ASTNode, RedirectMode};
 use crate::lexer::{Token, Operator, QuoteType};
 
 pub fn parse(tokens: &[Token]) -> Result<ASTNode, String> {
-    let mut iter = tokens.iter().peekable();
-    let mut nodes = Vec::new();
-    let mut current_command = Vec::new();
-    let mut current_word = String::new();
+    let mut parser = Parser::new(tokens);
+    parser.parse_command()
+}
 
-    while let Some(token) = iter.next() {
-        match token {
-            Token::Word(word) => {
-                current_word.push_str(word);
-                if !iter.peek().map_or(false, |t| matches!(t, Token::Quote(_))) {
-                    current_command.push(current_word.clone());
-                    current_word.clear();
-                }
-            }
-            Token::Quote(quote_type) => {
-                match quote_type {
-                    QuoteType::Single | QuoteType::Double => {
-                        if let Some(Token::Word(content)) = iter.next() {
-                            current_word.push_str(content);
-                            // Look for closing quote
-                            if let Some(Token::Quote(closing)) = iter.next() {
-                                if closing == quote_type {
-                                    current_command.push(current_word.clone());
-                                    current_word.clear();
-                                }
+struct Parser<'a> {
+    tokens: &'a [Token],
+    pos: usize,
+}
+
+impl<'a> Parser<'a> {
+    fn new(tokens: &'a [Token]) -> Self {
+        Self { tokens, pos: 0 }
+    }
+
+    fn current_token(&self) -> Option<&'a Token> {
+        self.tokens.get(self.pos)
+    }
+
+    fn advance(&mut self) {
+        self.pos += 1;
+    }
+
+    fn peek_next(&self) -> Option<&Token> {
+        self.tokens.get(self.pos + 1)
+    }
+
+    fn parse_command(&mut self) -> Result<ASTNode, String> {
+        let mut words = Vec::new();
+        let mut redirects = Vec::new();
+        
+        while let Some(token) = self.current_token() {
+            match token {
+                Token::Word(word) => {
+                    words.push(word.clone());
+                    self.advance();
+                },
+                Token::Quote(quote_type) => {
+                    match quote_type {
+                        QuoteType::Single | QuoteType::Double => {
+                            if let Some(Token::Word(content)) = self.peek_next() {
+                                words.push(content.clone());
+                                self.advance(); // consume word
+                                self.advance(); // consume closing quote
+                            }
+                        }
+                        QuoteType::Escaped => {
+                            if let Some(Token::Word(next)) = self.peek_next() {
+                                words.push(next.clone());
+                                self.advance();
                             }
                         }
                     }
-                    QuoteType::Escaped => {
-                        if let Some(Token::Word(next)) = iter.next() {
-                            current_word.push_str(next);
-                        }
+                    self.advance();
+                },
+                Token::Operator(Operator::RedirectOut) => {
+                    self.advance();
+                    if let Some(Token::Word(file)) = self.current_token() {
+                        redirects.push((1, RedirectMode::Overwrite, file.clone()));
+                        self.advance();
+                    } else {
+                        return Err("Expected filename after redirection".to_string());
                     }
-                }
-            }
-            Token::Operator(op) => {
-                if !current_command.is_empty() {
-                    nodes.push(create_command(&current_command)?);
-                    current_command.clear();
-                }
-                match op {
-                    Operator::RedirectOut => {
-                        if let Some(Token::Word(file)) = iter.next() {
-                            let command = nodes.pop().ok_or("No command before redirection")?;
-                            nodes.push(ASTNode::Redirect {
-                                command: Box::new(command),
-                                fd: 1,
-                                file: file.clone(),
-                                mode: RedirectMode::Overwrite,
-                            });
-                        }
+                },
+                Token::Operator(Operator::Pipe) => {
+                    self.advance();
+                    let right = self.parse_command()?;
+                    if words.is_empty() {
+                        return Err("No command before pipe".to_string());
                     }
-                    Operator::Pipe => {
-                        if let Some(right) = parse_command(&mut iter)? {
-                            let left = nodes.pop().ok_or("No command before pipe")?;
-                            nodes.push(ASTNode::Pipe {
-                                left: Box::new(left),
-                                right: Box::new(right),
-                            });
-                        }
-                    }
-                    Operator::PipeAnd | Operator::And | Operator::Or | Operator::Background | Operator::RedirectIn | Operator::RedirectAppend | Operator::Semicolon | Operator::RedirectError => {
-                        return Err(format!("Operator {:?} not implemented", op));
-                    }
-                }
-            }
-            Token::Space | Token::NewLine => {
-                if !current_word.is_empty() {
-                    current_command.push(current_word.clone());
-                    current_word.clear();
-                }
+                    return Ok(ASTNode::Pipe {
+                        left: Box::new(ASTNode::Command {
+                            name: words.remove(0),
+                            args: words,
+                        }),
+                        right: Box::new(right),
+                    });
+                },
+                _ => break,
             }
         }
-    }
 
-    if !current_command.is_empty() {
-        nodes.push(create_command(&current_command)?);
-    }
-
-    Ok(nodes.pop().ok_or("No valid command found")?)
-}
-
-fn parse_command<'a, I>(tokens: &mut I) -> Result<Option<ASTNode>, String>
-where
-    I: Iterator<Item = &'a Token>,
-{
-    let mut command = Vec::new();
-    let mut in_command = true;
-
-    while let Some(token) = tokens.next() {
-        match token {
-            Token::Word(word) => {
-                command.push(word.clone());
-            }
-            Token::Quote(qt) => match qt {
-                QuoteType::Single | QuoteType::Double => {
-                    if let Some(Token::Word(word)) = tokens.next() {
-                        command.push(word.clone());
-                        // Skip closing quote
-                        tokens.next();
-                    }
-                }
-                QuoteType::Escaped => {
-                    if let Some(Token::Word(word)) = tokens.next() {
-                        command.push(word.clone());
-                    }
-                }
-            },
-            Token::Operator(op) => match op {
-                Operator::Pipe => {
-                    let left = create_command(&command)?;
-                    if let Some(right) = parse_command(tokens)? {
-                        return Ok(Some(ASTNode::Pipe {
-                            left: Box::new(left),
-                            right: Box::new(right),
-                        }));
-                    }
-                    break;
-                }
-                Operator::RedirectOut => {
-                    let cmd = create_command(&command)?;
-                    if let Some(Token::Word(file)) = tokens.next() {
-                        return Ok(Some(ASTNode::Redirect {
-                            command: Box::new(cmd),
-                            fd: 1,
-                            file: file.clone(),
-                            mode: RedirectMode::Overwrite,
-                        }));
-                    }
-                    break;
-                }
-                _ => {
-                    in_command = false;
-                    break;
-                }
-            },
-            Token::Space => continue,
-            _ => {
-                in_command = false;
-                break;
-            }
+        if words.is_empty() {
+            return Err("Empty command".to_string());
         }
-    }
 
-    if in_command && !command.is_empty() {
-        Ok(Some(create_command(&command)?))
-    } else {
-        Ok(None)
-    }
-}
+        let mut command = ASTNode::Command {
+            name: words.remove(0),
+            args: words,
+        };
 
-fn create_command(words: &[String]) -> Result<ASTNode, String> {
-    if words.is_empty() {
-        return Err("Empty command".to_string());
+        // Apply redirections in order
+        for (fd, mode, file) in redirects {
+            command = ASTNode::Redirect {
+                command: Box::new(command),
+                fd,
+                file,
+                mode,
+            };
+        }
+
+        Ok(command)
     }
-    
-    Ok(ASTNode::Command {
-        name: words[0].clone(),
-        args: words[1..].to_vec(),
-    })
 }

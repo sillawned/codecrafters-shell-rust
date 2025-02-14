@@ -63,7 +63,8 @@ pub fn tokenize(input: &str) -> Vec<TokenType> {
                 tokens.push(tokenize_quoted_string(&mut chars));
             }
             '>' | '<' => {
-                tokens.push(tokenize_redirection(&mut chars));
+                let token = tokenize_redirection(&mut chars);
+                tokens.push(token);
             }
             '|' => {
                 tokens.push(tokenize_pipe(&mut chars));
@@ -138,13 +139,14 @@ fn tokenize_background(chars: &mut std::iter::Peekable<std::str::Chars>) -> Toke
 }
 
 fn tokenize_redirection(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
-    let operator = chars.next().unwrap();
-    let operator = if operator == '>' && chars.peek() == Some(&'>') {
-        chars.next(); // Consume the next ">"
-        ">>".to_string()
-    } else {
-        operator.to_string()
-    };
+    let op = chars.next().unwrap();
+    let mut operator = op.to_string();
+    
+    if op == '>' && chars.peek() == Some(&'>') {
+        chars.next();
+        operator.push('>');
+    }
+    
     TokenType::RedirectionOperator(operator)
 }
 
@@ -173,91 +175,4 @@ fn tokenize_dollar(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenTyp
         }
         TokenType::DollarVar(var)
     }
-}
-
-fn tokenize_comment(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
-    chars.next(); // Consume the "#"
-    let comment: String = chars.collect();
-    TokenType::Comment(comment)
-}
-
-fn tokenize_assignment(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
-    let mut var_name = String::new();
-    while let Some(&c) = chars.peek() {
-        if c == '=' {
-            chars.next(); // Consume the "="
-            break;
-        }
-        var_name.push(c);
-        chars.next();
-    }
-    let mut value = String::new();
-    while let Some(&c) = chars.peek() {
-        if c == ' ' || c == '\t' || c == '\n' {
-            break;
-        }
-        value.push(c);
-        chars.next();
-    }
-    TokenType::Assignment(var_name, value)
-}
-
-fn tokenize_file_descriptor(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
-    let mut fd = String::new();
-    while let Some(&c) = chars.peek() {
-        if !c.is_digit(10) {
-            break;
-        }
-        fd.push(c);
-        chars.next();
-    }
-    TokenType::FileDescriptor(fd.parse().unwrap())
-}
-
-fn process_argument(arg: &str) -> String {
-    let mut result = String::new();
-    let mut chars = arg.chars().peekable();
-    
-    while let Some(c) = chars.next() {
-        match c {
-            '\\' => {
-                if let Some(next) = chars.next() {
-                    match next {
-                        ' ' | '\'' | '"' => result.push(next),
-                        '\\' => result.push('\\'),
-                        _ => {
-                            result.push('\\');
-                            result.push(next);
-                        }
-                    }
-                }
-            }
-            _ => result.push(c),
-        }
-    }
-    result
-}
-
-fn process_escapes(s: &str) -> String {
-    let mut result = String::new();
-    let mut chars = s.chars().peekable();
-    
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            if let Some(next) = chars.next() {
-                match next {
-                    'n' => result.push('\n'),
-                    't' => result.push('\t'),
-                    'r' => result.push('\r'),
-                    '\\' => result.push('\\'),
-                    _ => {
-                        result.push(next); // Preserve the escaped character as-is
-                    }
-                }
-            }
-        } else {
-            result.push(c);
-        }
-    }
-    result
 }
