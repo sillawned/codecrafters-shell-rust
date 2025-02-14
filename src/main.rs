@@ -72,7 +72,8 @@ fn main() {
             }
         };
 
-        match executor::execute(&ast) {
+        let mut executor = executor::Executor::new();
+        match executor.execute(&ast) {
             Ok(status) => last_status = status,
             Err(e) => {
                 eprintln!("{}", e);
