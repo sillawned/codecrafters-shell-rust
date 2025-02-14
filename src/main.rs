@@ -10,6 +10,7 @@ pub mod executor;
 pub mod parser;
 pub mod tokenizer;
 pub mod utils;
+pub mod processor;
 
 fn main() {
     let stdin = io::stdin();

@@ -3,6 +3,7 @@ use crate::builtins;
 use crate::utils::{self, search_cmd};
 use std::process::ExitStatus;
 use std::os::unix::process::ExitStatusExt;
+use crate::processor::{process_text, ProcessingMode};
 
 fn process_argument(arg: &str) -> String {
     let mut result = String::new();
@@ -143,14 +144,14 @@ fn build_command(node: &ASTNode) -> Result<std::process::Command, String> {
     match node {
         ASTNode::Command { name, args } => {
             let paths = std::env::var("PATH").unwrap_or_default();
+            let cmd_name = process_text(name, ProcessingMode::Command);
             
-            // Try exact path match first without processing the name
-            if let Some(cmd_path) = search_cmd(name, &paths) {
+            if let Some(cmd_path) = search_cmd(&cmd_name, &paths) {
                 let mut cmd = std::process::Command::new(cmd_path);
-                cmd.args(args.iter().map(|arg| process_argument(arg)));
+                cmd.args(args.iter().map(|arg| process_text(arg, ProcessingMode::Argument)));
                 Ok(cmd)
             } else {
-                Err(format!("{}: command not found", name))
+                Err(format!("{}: command not found", cmd_name))
             }
         }
         _ => Err("Unsupported ASTNode for command building".to_string()),

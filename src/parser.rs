@@ -1,5 +1,6 @@
 use crate::ast::{ASTNode, RedirectMode};
 use crate::tokenizer::TokenType;
+use crate::processor::{process_text, ProcessingMode};
 
 pub fn parse(tokens: &Vec<TokenType>) -> Result<ASTNode, String> {
     let mut iter = tokens.iter().peekable();
@@ -140,6 +141,7 @@ where
                     return Err("Expected file after redirection operator".to_string());
                 }
 
+                let filename = process_text(&filename, ProcessingMode::Path);
                 command = ASTNode::Redirect {
                     command: Box::new(command),
                     file: filename,
