@@ -270,6 +270,11 @@ fn tokenize_word(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType 
                     chars.next();
                 }
             }
+            // Allow forward slashes and dots in words for paths
+            (QuoteState::None, c) if c == '/' || c == '.' || c.is_alphanumeric() || c == '_' || c == '-' => {
+                word.push(c);
+                chars.next();
+            }
             (QuoteState::None, ' ' | '\t' | '\n' | '|' | '&' | ';' | '>' | '<' | '(' | ')' | '$' | '#' | '=') => {
                 break;
             }

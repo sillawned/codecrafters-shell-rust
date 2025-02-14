@@ -96,24 +96,31 @@ where
             TokenType::RedirectionOperator(op) => {
                 tokens.next(); // Consume the redirection operator
                 if fd == -1 {
-                    // If no file descriptor was provided, use default values
                     fd = if op == "<" { 0 } else { 1 };
                 }
-                if let Some(TokenType::Word(file)) = tokens.next() {
-                    command = ASTNode::Redirect {
-                        command: Box::new(command),
-                        file: file.clone(),
-                        fd,
-                        mode: match op.as_str() {
-                            ">" => RedirectMode::Overwrite,
-                            ">>" => RedirectMode::Append,
-                            "<" => RedirectMode::Input,
-                            _ => return Err(format!("Unknown redirection operator: {}", op)),
-                        },
-                    };
-                    fd = -1; // Reset file descriptor after using it
-                } else {
-                    return Err("Expected file after redirection operator".to_string());
+                
+                // Skip any spaces after the redirection operator
+                while let Some(TokenType::Space) = tokens.peek() {
+                    tokens.next();
+                }
+                
+                // Look for the file name
+                match tokens.next() {
+                    Some(TokenType::Word(file)) => {
+                        command = ASTNode::Redirect {
+                            command: Box::new(command),
+                            file: file.clone(),
+                            fd,
+                            mode: match op.as_str() {
+                                ">" => RedirectMode::Overwrite,
+                                ">>" => RedirectMode::Append,
+                                "<" => RedirectMode::Input,
+                                _ => return Err(format!("Unknown redirection operator: {}", op)),
+                            },
+                        };
+                        fd = -1; // Reset file descriptor after using it
+                    }
+                    _ => return Err("Expected file after redirection operator".to_string()),
                 }
             }
             TokenType::Background => {
