@@ -143,14 +143,13 @@ fn build_command(node: &ASTNode) -> Result<std::process::Command, String> {
         ASTNode::Command { name, args } => {
             let paths = std::env::var("PATH").unwrap_or_default();
             
-            // Try exact path match first
-            let processed_name = process_argument(name);
-            if let Some(cmd_path) = search_cmd(&processed_name, &paths) {
+            // Try exact path match first without processing the name
+            if let Some(cmd_path) = search_cmd(name, &paths) {
                 let mut cmd = std::process::Command::new(cmd_path);
                 cmd.args(args.iter().map(|arg| process_argument(arg)));
                 Ok(cmd)
             } else {
-                Err(format!("{}: command not found", processed_name))
+                Err(format!("{}: command not found", name))
             }
         }
         _ => Err("Unsupported ASTNode for command building".to_string()),

@@ -120,6 +120,21 @@ where
                         };
                         fd = -1; // Reset file descriptor after using it
                     }
+                    Some(TokenType::SingleQuotedString(file)) |
+                    Some(TokenType::DoubleQuotedString(file)) => {
+                        command = ASTNode::Redirect {
+                            command: Box::new(command),
+                            file: file.clone(),
+                            fd,
+                            mode: match op.as_str() {
+                                ">" => RedirectMode::Overwrite,
+                                ">>" => RedirectMode::Append,
+                                "<" => RedirectMode::Input,
+                                _ => return Err(format!("Unknown redirection operator: {}", op)),
+                            },
+                        };
+                        fd = -1;
+                    }
                     _ => return Err("Expected file after redirection operator".to_string()),
                 }
             }
