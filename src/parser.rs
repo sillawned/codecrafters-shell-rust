@@ -91,7 +91,7 @@ where
         match token {
             TokenType::FileDescriptor(num) => {
                 fd = *num;
-                tokens.next(); // Consume the file descriptor
+                tokens.next();
             }
             TokenType::RedirectionOperator(op) => {
                 tokens.next(); // Consume the redirection operator
@@ -99,64 +99,59 @@ where
                     fd = if op == "<" { 0 } else { 1 };
                 }
                 
-                // Skip any spaces after the redirection operator
+                // Skip spaces until we find a word or quoted string
                 while let Some(TokenType::Space) = tokens.peek() {
                     tokens.next();
                 }
                 
-                // Look for the file name
-                match tokens.next() {
-                    Some(TokenType::Word(file)) => {
-                        command = ASTNode::Redirect {
-                            command: Box::new(command),
-                            file: file.clone(),
-                            fd,
-                            mode: match op.as_str() {
-                                ">" => RedirectMode::Overwrite,
-                                ">>" => RedirectMode::Append,
-                                "<" => RedirectMode::Input,
-                                _ => return Err(format!("Unknown redirection operator: {}", op)),
-                            },
-                        };
-                        fd = -1; // Reset file descriptor after using it
+                // Collect the filename, which might span multiple tokens
+                let mut filename = String::new();
+                while let Some(token) = tokens.peek() {
+                    match token {
+                        TokenType::Word(word) => {
+                            filename.push_str(word);
+                            tokens.next();
+                        }
+                        TokenType::SingleQuotedString(word) |
+                        TokenType::DoubleQuotedString(word) => {
+                            filename.push_str(word);
+                            tokens.next();
+                        }
+                        TokenType::Space => {
+                            // Stop at space unless next token is part of path
+                            let mut lookahead = tokens.clone();
+                            lookahead.next(); // Skip current space
+                            match lookahead.next() {
+                                Some(TokenType::Word(w)) if w.starts_with('/') => {
+                                    filename.push('/');
+                                    tokens.next(); // consume space
+                                }
+                                _ => break,
+                            }
+                        }
+                        _ => break,
                     }
-                    Some(TokenType::SingleQuotedString(file)) |
-                    Some(TokenType::DoubleQuotedString(file)) => {
-                        command = ASTNode::Redirect {
-                            command: Box::new(command),
-                            file: file.clone(),
-                            fd,
-                            mode: match op.as_str() {
-                                ">" => RedirectMode::Overwrite,
-                                ">>" => RedirectMode::Append,
-                                "<" => RedirectMode::Input,
-                                _ => return Err(format!("Unknown redirection operator: {}", op)),
-                            },
-                        };
-                        fd = -1;
-                    }
-                    _ => return Err("Expected file after redirection operator".to_string()),
                 }
-            }
-            TokenType::Background => {
-                tokens.next(); // Consume the "&"
-                command = ASTNode::Background {
+
+                if filename.is_empty() {
+                    return Err("Expected file after redirection operator".to_string());
+                }
+
+                command = ASTNode::Redirect {
                     command: Box::new(command),
+                    file: filename,
+                    fd,
+                    mode: match op.as_str() {
+                        ">" => RedirectMode::Overwrite,
+                        ">>" => RedirectMode::Append,
+                        "<" => RedirectMode::Input,
+                        _ => return Err(format!("Unknown redirection operator: {}", op)),
+                    },
                 };
-            }
-            TokenType::LeftParen => {
-                tokens.next(); // Consume the "("
-                let subshell_command = parse_sequence(tokens)?;
-                if let Some(TokenType::RightParen) = tokens.next() {
-                    command = ASTNode::Subshell {
-                        command: Box::new(subshell_command),
-                    };
-                } else {
-                    return Err("Expected closing parenthesis for subshell".to_string());
-                }
+                fd = -1;
             }
             TokenType::Space => {
-                tokens.next(); // Consume the space
+                tokens.next();
             }
             _ => break,
         }

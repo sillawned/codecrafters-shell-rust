@@ -253,33 +253,18 @@ fn tokenize_file_descriptor(chars: &mut std::iter::Peekable<std::str::Chars>) ->
 
 fn tokenize_word(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
     let mut word = String::new();
-    let mut quote_state = QuoteState::None;
-
+    
     while let Some(&c) = chars.peek() {
-        match (quote_state, c) {
-            (QuoteState::None, '\\') => {
-                chars.next(); // Consume backslash
+        match c {
+            '\\' => {
+                chars.next();
                 if let Some(&escaped_char) = chars.peek() {
-                    word.push('\\'); // Preserve the backslash
                     word.push(escaped_char);
                     chars.next();
                 }
             }
-            (QuoteState::Single, '\'') => {
-                quote_state = QuoteState::None;
-                chars.next();
-            }
-            (QuoteState::Single, _) => {
-                word.push(c);
-                chars.next();
-            }
-            (QuoteState::None, '\'') => {
-                quote_state = QuoteState::Single;
-                chars.next();
-            }
-            (QuoteState::None, ' ') if quote_state != QuoteState::None => {
-                word.push(c);
-                chars.next();
+            ' ' | '\t' | '\n' | '|' | '&' | ';' | '>' | '<' | '(' | ')' | '$' | '#' | '=' | '\'' | '"' => {
+                break;
             }
             _ => {
                 word.push(c);
