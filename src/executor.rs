@@ -23,12 +23,13 @@ fn process_argument(arg: &str) -> String {
                         result.push(next);
                     }
                 } else {
-                    // Outside quotes, interpret escaped characters
+                    // Outside quotes, handle escaped characters
                     if let Some(next) = chars.next() {
                         match next {
+                            ' ' | '\'' | '"' => result.push(next),
+                            '\\' => result.push('\\'),
                             'n' => result.push('\n'),
                             't' => result.push('\t'),
-                            '\\' => result.push('\\'),
                             _ => {
                                 result.push('\\');
                                 result.push(next);

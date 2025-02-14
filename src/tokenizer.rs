@@ -253,17 +253,42 @@ fn tokenize_file_descriptor(chars: &mut std::iter::Peekable<std::str::Chars>) ->
 
 fn tokenize_word(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType {
     let mut word = String::new();
+    let mut quote_state = QuoteState::None;
     
     while let Some(&c) = chars.peek() {
-        match c {
-            '\\' => {
-                chars.next();
+        match (quote_state, c) {
+            (QuoteState::None, '\\') => {
+                chars.next(); // Consume backslash
                 if let Some(&escaped_char) = chars.peek() {
-                    word.push(escaped_char);
-                    chars.next();
+                    match escaped_char {
+                        ' ' | '\'' | '"' | '\\' => {
+                            // For these characters, preserve them literally after backslash
+                            word.push(escaped_char);
+                            chars.next();
+                        }
+                        _ => {
+                            // For other characters, keep both backslash and char
+                            word.push('\\');
+                            word.push(escaped_char);
+                            chars.next();
+                        }
+                    }
                 }
             }
-            ' ' | '\t' | '\n' | '|' | '&' | ';' | '>' | '<' | '(' | ')' | '$' | '#' | '=' | '\'' | '"' => {
+            (QuoteState::None, ' ') => {
+                // Check if space is escaped
+                let mut look_ahead = chars.clone();
+                if matches!(look_ahead.next(), Some(' ')) {
+                    chars.next(); // consume space
+                    word.push(' ');
+                } else {
+                    break;
+                }
+            }
+            (QuoteState::None, '\'' | '"') => break,
+            (QuoteState::None, c) if c == ' ' || c == '\t' || c == '\n' || c == '|' || c == '&' || 
+                                   c == ';' || c == '>' || c == '<' || c == '(' || c == ')' || 
+                                   c == '$' || c == '#' || c == '=' => {
                 break;
             }
             _ => {
@@ -273,6 +298,30 @@ fn tokenize_word(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType 
         }
     }
     TokenType::Word(word)
+}
+
+fn process_argument(arg: &str) -> String {
+    let mut result = String::new();
+    let mut chars = arg.chars().peekable();
+    
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => {
+                if let Some(next) = chars.next() {
+                    match next {
+                        ' ' | '\'' | '"' => result.push(next),
+                        '\\' => result.push('\\'),
+                        _ => {
+                            result.push('\\');
+                            result.push(next);
+                        }
+                    }
+                }
+            }
+            _ => result.push(c),
+        }
+    }
+    result
 }
 
 fn process_escapes(s: &str) -> String {
