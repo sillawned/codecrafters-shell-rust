@@ -50,66 +50,18 @@ impl<'a> Lexer<'a> {
         while let Some(c) = self.current {
             match c {
                 ' ' | '\t' => {
-                    self.consume_whitespace();
-                    return Some(Token::Space);
+                    self.advance(); // Just advance past the space
+                    // Only return Space token if we haven't reached the end
+                    if self.current.is_some() {
+                        return Some(Token::Space);
+                    }
                 }
                 '\n' => {
                     self.advance();
                     return Some(Token::NewLine);
                 }
-                '|' => {
-                    self.advance();
-                    return Some(match self.peek() {
-                        Some('|') => {
-                            self.advance();
-                            Token::Operator(Operator::Or)
-                        }
-                        Some('&') => {
-                            self.advance();
-                            Token::Operator(Operator::PipeAnd)
-                        }
-                        _ => Token::Operator(Operator::Pipe)
-                    });
-                }
-                '&' => {
-                    self.advance();
-                    return Some(match self.peek() {
-                        Some('&') => {
-                            self.advance();
-                            Token::Operator(Operator::And)
-                        }
-                        _ => Token::Operator(Operator::Background)
-                    });
-                }
-                '>' => {
-                    self.advance();
-                    return Some(match self.peek() {
-                        Some('>') => {
-                            self.advance();
-                            Token::Operator(Operator::RedirectAppend)
-                        }
-                        _ => Token::Operator(Operator::RedirectOut)
-                    });
-                }
-                '<' => {
-                    self.advance();
-                    return Some(Token::Operator(Operator::RedirectIn));
-                }
-                ';' => {
-                    self.advance();
-                    return Some(Token::Operator(Operator::Semicolon));
-                }
-                '\'' => {
-                    self.advance();
-                    return Some(Token::Quote(QuoteType::Single));
-                }
-                '"' => {
-                    self.advance();
-                    return Some(Token::Quote(QuoteType::Double));
-                }
-                '\\' => {
-                    self.advance();
-                    return Some(Token::Quote(QuoteType::Escaped));
+                '|' | '&' | '>' | '<' | ';' => {
+                    return Some(self.read_operator());
                 }
                 _ => {
                     return Some(Token::Word(self.read_word()));
@@ -121,10 +73,33 @@ impl<'a> Lexer<'a> {
 
     fn read_word(&mut self) -> String {
         let mut word = String::new();
+        let mut in_quotes = false;
+        let mut quote_char = None;
+
         while let Some(c) = self.current {
-            match c {
-                ' ' | '\t' | '\n' | '|' | '&' | '>' | '<' | ';' | '\'' | '"' | '\\' => break,
-                _ => {
+            match (c, in_quotes) {
+                ('"' | '\'', false) => {
+                    in_quotes = true;
+                    quote_char = Some(c);
+                    word.push(c);  // Keep the quotes
+                    self.advance();
+                }
+                (c, true) if Some(c) == quote_char => {
+                    word.push(c);  // Keep the quotes
+                    self.advance();
+                    in_quotes = false;
+                    quote_char = None;
+                }
+                ('\\', _) => {
+                    word.push(c);
+                    self.advance();
+                    if let Some(next) = self.current {
+                        word.push(next);
+                        self.advance();
+                    }
+                }
+                (' ' | '\t' | '\n' | '|' | '&' | '>' | '<' | ';', false) => break,
+                (_, _) => {
                     word.push(c);
                     self.advance();
                 }
@@ -133,9 +108,50 @@ impl<'a> Lexer<'a> {
         word
     }
 
+    fn read_operator(&mut self) -> Token {
+        match self.current {
+            Some('|') => {
+                self.advance();
+                if self.current == Some('|') {
+                    self.advance();
+                    Token::Operator(Operator::Or)
+                } else {
+                    Token::Operator(Operator::Pipe)
+                }
+            }
+            Some('&') => {
+                self.advance();
+                if self.current == Some('&') {
+                    self.advance();
+                    Token::Operator(Operator::And)
+                } else {
+                    Token::Operator(Operator::Background)
+                }
+            }
+            Some('>') => {
+                self.advance();
+                if self.current == Some('>') {
+                    self.advance();
+                    Token::Operator(Operator::RedirectAppend)
+                } else {
+                    Token::Operator(Operator::RedirectOut)
+                }
+            }
+            Some('<') => {
+                self.advance();
+                Token::Operator(Operator::RedirectIn)
+            }
+            Some(';') => {
+                self.advance();
+                Token::Operator(Operator::Semicolon)
+            }
+            _ => unreachable!(),
+        }
+    }
+
     fn consume_whitespace(&mut self) {
-        while let Some(c) = self.peek() {
-            if !c.is_whitespace() {
+        while let Some(c) = self.current {
+            if !matches!(c, ' ' | '\t') {
                 break;
             }
             self.advance();

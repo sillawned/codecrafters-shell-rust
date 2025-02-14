@@ -9,33 +9,20 @@ fn process_argument(arg: &str) -> String {
     let mut result = String::new();
     let mut chars = arg.chars().peekable();
     let mut in_quotes = false;
-    
+
     while let Some(c) = chars.next() {
         match c {
-            '\'' => {
+            '"' => {
                 in_quotes = !in_quotes;
-                result.push(c);
+                continue;  // Skip the quote character
             }
-            '\\' => {
-                if in_quotes {
-                    // Inside quotes, preserve backslash and next character literally
-                    result.push('\\');
-                    if let Some(next) = chars.next() {
-                        result.push(next);
-                    }
-                } else {
-                    // Outside quotes, handle escaped characters
-                    if let Some(next) = chars.next() {
-                        match next {
-                            ' ' | '\'' | '"' => result.push(next),
-                            '\\' => result.push('\\'),
-                            'n' => result.push('\n'),
-                            't' => result.push('\t'),
-                            _ => {
-                                result.push('\\');
-                                result.push(next);
-                            }
-                        }
+            '\\' if !in_quotes => {
+                if let Some(next) = chars.next() {
+                    match next {
+                        'n' => result.push('\n'),
+                        't' => result.push('\t'),
+                        'r' => result.push('\r'),
+                        _ => result.push(next),
                     }
                 }
             }
@@ -52,16 +39,26 @@ pub fn execute(node: &ASTNode) -> Result<ExitStatus, String> {
     match node {
         ASTNode::Command { name, args } => {
             if utils::is_builtin(name) {
-                // Convert builtin result to ExitStatus
-                match builtins::execute_builtin(name, args) {
+                // Process arguments for builtins
+                let processed_args: Vec<String> = args.iter()
+                    .map(|arg| process_argument(arg))
+                    .collect();
+                match builtins::execute_builtin(name, &processed_args) {
                     Ok(()) => Ok(ExitStatus::from_raw(0)),
-                    Err(_) => Ok(ExitStatus::from_raw(1))
+                    Err(e) => {
+                        eprintln!("{}", e);
+                        Ok(ExitStatus::from_raw(1))
+                    }
                 }
             } else {
                 let paths = std::env::var("PATH").unwrap_or_default();
                 if let Some(cmd_path) = search_cmd(name, &paths) {
                     let mut cmd = std::process::Command::new(cmd_path);
-                    cmd.args(args.iter().map(|arg| process_argument(arg))); // Handle escaped sequences
+                    // Process each argument
+                    let processed_args: Vec<String> = args.iter()
+                        .map(|arg| process_argument(arg))
+                        .collect();
+                    cmd.args(&processed_args);
                     Ok(cmd.status().map_err(|e| e.to_string())?)
                 } else {
                     eprintln!("{}: command not found", name);

@@ -14,6 +14,12 @@ pub mod processor;
 pub mod lexer;
 
 fn main() {
+    // Set up signal handlers
+    // ctrlc::set_handler(move || {
+    //     println!();
+    //     io::stdout().flush().unwrap();
+    // }).expect("Error setting Ctrl-C handler");
+
     let stdin = io::stdin();
     let mut input = String::new();
     let mut last_status = ExitStatus::from_raw(0);
@@ -24,14 +30,22 @@ fn main() {
         io::stdout().flush().unwrap();
 
         input.clear();  // Clear before reading new input
-        if stdin.read_line(&mut input).is_err() {
-            eprintln!("Error reading input");
-            continue;
-        }
-
-        // Skip empty lines but still show prompt
-        if input.trim().is_empty() {
-            continue;
+        match stdin.read_line(&mut input) {
+            Ok(0) => {
+                // EOF (Ctrl+D)
+                println!();
+                break;
+            }
+            Ok(_) => {
+                // Skip empty lines but still show prompt
+                if input.trim().is_empty() {
+                    continue;
+                }
+            }
+            Err(e) => {
+                eprintln!("Error reading input: {}", e);
+                continue;
+            }
         }
 
         let tokens = lexer::lex(&input);

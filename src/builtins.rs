@@ -15,7 +15,11 @@ pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
             std::process::exit(code & 255); // POSIX requires 8-bit exit codes
         },
         "echo" => {
-            println!("{}", args.join(""));
+            if args.is_empty() {
+                println!();
+            } else {
+                println!("{}", args.join(" "));
+            }
             Ok(())
         }
         "pwd" => {
