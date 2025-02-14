@@ -5,7 +5,29 @@ use std::process::ExitStatus;
 use std::os::unix::process::ExitStatusExt;
 
 fn process_argument(arg: &str) -> String {
-    arg.to_string()
+    let mut result = String::new();
+    let mut chars = arg.chars().peekable();
+    
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => {
+                if let Some(next) = chars.next() {
+                    match next {
+                        ' ' => result.push(' '),
+                        '\\' => result.push('\\'),
+                        '\'' => result.push('\''),
+                        '"' => result.push('"'),
+                        _ => {
+                            result.push('\\');
+                            result.push(next);
+                        }
+                    }
+                }
+            }
+            _ => result.push(c),
+        }
+    }
+    result
 }
 
 pub fn execute(node: &ASTNode) -> Result<ExitStatus, String> {

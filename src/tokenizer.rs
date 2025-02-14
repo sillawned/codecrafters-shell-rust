@@ -258,60 +258,38 @@ fn tokenize_word(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType 
     while let Some(&c) = chars.peek() {
         match (quote_state, c) {
             (QuoteState::None, '\\') => {
-                chars.next();
+                chars.next(); // Consume backslash
                 if let Some(&escaped_char) = chars.peek() {
+                    // Always preserve the escaped character, including spaces
                     word.push(escaped_char);
                     chars.next();
                 }
             }
-            // Allow forward slashes and dots in words for paths
-            (QuoteState::None, c) if c == '/' || c == '.' || c.is_alphanumeric() || c == '_' || c == '-' => {
-                word.push(c);
-                chars.next();
-            }
-            (QuoteState::None, ' ' | '\t' | '\n' | '|' | '&' | ';' | '>' | '<' | '(' | ')' | '$' | '#' | '=') => {
-                break;
-            }
-            (QuoteState::None, '\'') => {
-                quote_state = QuoteState::Single;
-                chars.next();
-            }
-            (QuoteState::None, '"') => {
-                quote_state = QuoteState::Double;
-                chars.next();
-            }
-            (QuoteState::Single, '\'') => {
-                quote_state = QuoteState::None;
-                chars.next();
-            }
-            (QuoteState::Single, _) => {
-                word.push(c);
-                chars.next();
-            }
-            (QuoteState::Double, '"') => {
-                quote_state = QuoteState::None;
-                chars.next();
-            }
-            (QuoteState::Double, '\\') => {
-                chars.next(); // Consume the backslash
-                if let Some(&escaped_char) = chars.peek() {
-                    match escaped_char {
-                        '\\' | '"' | '$' | '`' | '\n' => {
-                            word.push(escaped_char);
-                            chars.next(); // Consume the escaped character
-                        }
-                        _ => {
-                            word.push('\\');
-                            word.push(escaped_char);
-                            chars.next(); // Consume the escaped character
-                        }
+            (QuoteState::None, ' ') => {
+                // Check if space is escaped
+                let mut look_ahead = chars.clone();
+                let mut escaped = false;
+                if let Some('\\') = look_ahead.next() {
+                    if let Some(' ') = look_ahead.next() {
+                        escaped = true;
                     }
                 }
+                if escaped {
+                    chars.next(); // Skip the space
+                    chars.next(); // Skip the backslash
+                    word.push(' ');
+                } else {
+                    break;
+                }
             }
-            (QuoteState::Double, _) => {
+            (QuoteState::None, c) if c.is_alphanumeric() || c == '/' || c == '.' || c == '_' || c == '-' || c == '\'' || c == '"' => {
                 word.push(c);
                 chars.next();
             }
+            (QuoteState::None, c) if c == '\t' || c == '\n' || c == '|' || c == '&' || c == ';' || c == '>' || c == '<' || c == '(' || c == ')' || c == '$' || c == '#' || c == '=' => {
+                break;
+            }
+            // ...existing code for quote states...
             _ => {
                 word.push(c);
                 chars.next();
@@ -319,4 +297,28 @@ fn tokenize_word(chars: &mut std::iter::Peekable<std::str::Chars>) -> TokenType 
         }
     }
     TokenType::Word(word)
+}
+
+fn process_escapes(s: &str) -> String {
+    let mut result = String::new();
+    let mut chars = s.chars().peekable();
+    
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(next) = chars.next() {
+                match next {
+                    'n' => result.push('\n'),
+                    't' => result.push('\t'),
+                    'r' => result.push('\r'),
+                    '\\' => result.push('\\'),
+                    _ => {
+                        result.push(next); // Preserve the escaped character as-is
+                    }
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
 }
