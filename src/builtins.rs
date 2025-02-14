@@ -1,4 +1,5 @@
 use std::env;
+use std::path::Path;
 use crate::utils::search_cmd;
 
 pub const BUILTINS: [&str; 15] = [
@@ -7,7 +8,12 @@ pub const BUILTINS: [&str; 15] = [
 
 pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
     match name {
-        "exit" => std::process::exit(args.get(0).and_then(|s| s.parse().ok()).unwrap_or(0)),
+        "exit" => {
+            let code = args.get(0)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+            std::process::exit(code & 255); // POSIX requires 8-bit exit codes
+        },
         "echo" => {
             println!("{}", args.join(""));
             Ok(())
@@ -17,9 +23,26 @@ pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
             Ok(())
         }
         "cd" => {
-            let path = args.get(0).map_or(env::var("HOME").unwrap(), |s| s.clone());
-            env::set_current_dir(&path).map_err(|e| e.to_string())
-        }
+            let path = if args.is_empty() {
+                env::var("HOME").map_err(|_| "HOME not set")?
+            } else {
+                args[0].clone()
+            };
+            
+            if path == "-" {
+                // Handle cd - to previous directory
+                let prev = env::var("OLDPWD").map_err(|_| "OLDPWD not set")?;
+                let curr = env::current_dir().map_err(|e| e.to_string())?;
+                env::set_var("OLDPWD", curr.to_string_lossy().to_string());
+                env::set_current_dir(&prev).map_err(|e| e.to_string())?;
+                println!("{}", prev);
+                Ok(())
+            } else {
+                let curr = env::current_dir().map_err(|e| e.to_string())?;
+                env::set_var("OLDPWD", curr.to_string_lossy().to_string());
+                env::set_current_dir(Path::new(&path)).map_err(|e| e.to_string())
+            }
+        },
         "type" => {
             if BUILTINS.contains(&args[0].as_str()) {
                 println!("{} is a shell builtin", args[0]);

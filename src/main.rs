@@ -1,5 +1,8 @@
 use std::string::String;
 use std::io::{self, Write};
+use std::env;
+use std::process::ExitStatus;
+use std::os::unix::process::ExitStatusExt;
 
 pub mod ast;
 pub mod builtins;
@@ -11,6 +14,9 @@ pub mod utils;
 fn main() {
     let stdin = io::stdin();
     let mut input = String::new();
+
+    // Set up signal handlers for SIGINT, SIGTSTP, etc.
+    let mut last_status = ExitStatus::from_raw(0);
 
     // Wait for user input
     loop {
@@ -30,14 +36,22 @@ fn main() {
             Ok(ast) => ast,
             Err(e) => {
                 eprintln!("Parse error: {}", e);
+                last_status = ExitStatus::from_raw(2);
                 input.clear();
                 continue;
             }
         };
 
-        if let Err(e) = executor::execute(&ast) {
-            eprintln!("{}", e);
+        match executor::execute(&ast) {
+            Ok(status) => last_status = status,
+            Err(e) => {
+                eprintln!("{}", e);
+                last_status = ExitStatus::from_raw(1);
+            }
         }
+
+        // Make last exit status available to scripts
+        env::set_var("?", last_status.code().unwrap_or(0).to_string());
 
         input.clear();
     }
