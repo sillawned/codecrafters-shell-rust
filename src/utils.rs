@@ -2,7 +2,13 @@ use std::path::Path;
 use std::os::unix::fs::PermissionsExt;
 
 pub fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
-    let cmd = cmd.trim();
+    let cmd = if cmd.starts_with('"') || cmd.starts_with('\'') {
+        // Strip quotes from command name
+        let len = cmd.len();
+        &cmd[1..len-1]
+    } else {
+        cmd
+    }.trim();
     
     // If command contains a slash, use it directly without PATH search
     if cmd.contains('/') {

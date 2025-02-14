@@ -86,23 +86,35 @@ impl<'a> Lexer<'a> {
             match (c, in_single_quote, in_double_quote) {
                 ('\'', false, false) => {
                     in_single_quote = true;
+                    // Keep the quote for command names
+                    word.push(c);
                     self.advance();
                 }
                 ('\'', true, false) => {
                     in_single_quote = false;
+                    // Keep the quote for command names
+                    word.push(c);
                     self.advance();
                 }
                 ('"', false, false) => {
                     in_double_quote = true;
+                    // Keep the quote for command names
+                    word.push(c);
                     self.advance();
                 }
                 ('"', false, true) => {
                     in_double_quote = false;
+                    // Keep the quote for command names
+                    word.push(c);
                     self.advance();
                 }
                 ('\\', false, true) => {
                     self.advance(); // consume backslash
                     if let Some(next) = self.current {
+                        // Keep escaped quotes in the word
+                        if next == '\'' || next == '"' {
+                            word.push('\\');
+                        }
                         word.push(next);
                         self.advance();
                     }
@@ -110,6 +122,10 @@ impl<'a> Lexer<'a> {
                 ('\\', false, false) => {
                     self.advance(); // consume backslash
                     if let Some(next) = self.current {
+                        // Keep escaped quotes in the word
+                        if next == '\'' || next == '"' {
+                            word.push('\\');
+                        }
                         word.push(next);
                         self.advance();
                     }
