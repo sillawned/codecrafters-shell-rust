@@ -144,24 +144,24 @@ fn build_command(node: &ASTNode) -> Result<std::process::Command, String> {
     match node {
         ASTNode::Command { name, args } => {
             let paths = std::env::var("PATH").unwrap_or_default();
-            let cmd_parts: Vec<&str> = name.split_whitespace().collect();
             
-            if cmd_parts.is_empty() {
-                return Err("Empty command".to_string());
-            }
+            // Only use the first part of the command for path lookup
+            let cmd_name = name.split_whitespace()
+                .next()
+                .ok_or_else(|| "Empty command".to_string())?;
 
-            // Try to find the command
-            if let Some(cmd_path) = search_cmd(cmd_parts[0], &paths) {
+            if let Some(cmd_path) = search_cmd(cmd_name, &paths) {
                 let mut cmd = std::process::Command::new(cmd_path);
-                // Add any command flags from the name
-                if cmd_parts.len() > 1 {
-                    cmd.args(&cmd_parts[1..]);
-                }
-                // Add explicit arguments
+                
+                // Add the remaining parts of the original command as arguments
+                let extra_args: Vec<_> = name.split_whitespace().skip(1).collect();
+                cmd.args(extra_args);
+                
+                // Add the explicit arguments
                 cmd.args(args);
                 Ok(cmd)
             } else {
-                Err(format!("{}: command not found", cmd_parts[0]))
+                Err(format!("{}: command not found", cmd_name))
             }
         }
         _ => Err("Unsupported ASTNode for command building".to_string()),
