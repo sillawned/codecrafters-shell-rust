@@ -105,55 +105,26 @@ where
                     tokens.next();
                 }
                 
-                // Collect the filename, which might span multiple tokens
-                let mut filename = String::new();
-                while let Some(token) = tokens.peek() {
-                    match token {
-                        TokenType::Word(word) => {
-                            filename.push_str(word);
-                            tokens.next();
-                        }
-                        TokenType::SingleQuotedString(word) |
-                        TokenType::DoubleQuotedString(word) => {
-                            filename.push_str(word);
-                            tokens.next();
-                        }
-                        TokenType::Space => {
-                            // Stop at space unless next token is part of path
-                            let mut lookahead = tokens.peekable();
-                            lookahead.next(); // Skip current space
-                            if let Some(TokenType::Word(w)) = lookahead.peek() {
-                                if w.starts_with('/') {
-                                    filename.push('/');
-                                    tokens.next(); // consume space
-                                } else {
-                                    break;
-                                }
-                            } else {
-                                break;
-                            }
-                        }
-                        _ => break,
+                // Get the next token for the file path
+                match tokens.next() {
+                    Some(TokenType::Word(file)) |
+                    Some(TokenType::SingleQuotedString(file)) |
+                    Some(TokenType::DoubleQuotedString(file)) => {
+                        command = ASTNode::Redirect {
+                            command: Box::new(command),
+                            file: file.clone(),
+                            fd,
+                            mode: match op.as_str() {
+                                ">" => RedirectMode::Overwrite,
+                                ">>" => RedirectMode::Append,
+                                "<" => RedirectMode::Input,
+                                _ => return Err(format!("Unknown redirection operator: {}", op)),
+                            },
+                        };
+                        fd = -1;
                     }
+                    _ => return Err("Expected file after redirection operator".to_string()),
                 }
-
-                if filename.is_empty() {
-                    return Err("Expected file after redirection operator".to_string());
-                }
-
-                let filename = process_text(&filename, ProcessingMode::Path);
-                command = ASTNode::Redirect {
-                    command: Box::new(command),
-                    file: filename,
-                    fd,
-                    mode: match op.as_str() {
-                        ">" => RedirectMode::Overwrite,
-                        ">>" => RedirectMode::Append,
-                        "<" => RedirectMode::Input,
-                        _ => return Err(format!("Unknown redirection operator: {}", op)),
-                    },
-                };
-                fd = -1;
             }
             TokenType::Space => {
                 tokens.next();
