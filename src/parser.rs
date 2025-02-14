@@ -119,14 +119,17 @@ where
                         }
                         TokenType::Space => {
                             // Stop at space unless next token is part of path
-                            let mut lookahead = tokens.clone();
+                            let mut lookahead = tokens.peekable();
                             lookahead.next(); // Skip current space
-                            match lookahead.next() {
-                                Some(TokenType::Word(w)) if w.starts_with('/') => {
+                            if let Some(TokenType::Word(w)) = lookahead.peek() {
+                                if w.starts_with('/') {
                                     filename.push('/');
                                     tokens.next(); // consume space
+                                } else {
+                                    break;
                                 }
-                                _ => break,
+                            } else {
+                                break;
                             }
                         }
                         _ => break,
