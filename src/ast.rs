@@ -11,7 +11,7 @@ pub enum ASTNode {
     Redirect {
         command: Box<ASTNode>,
         fd: i32,
-        file: String,
+        target: RedirectTarget,
         mode: RedirectMode,
     },
     Background {
@@ -40,7 +40,19 @@ pub enum ASTNode {
 
 #[derive(Debug, Copy, Clone)]
 pub enum RedirectMode {
-    Overwrite, // >
-    Append,    // >>
-    Input,     // <
+    Overwrite,      // >
+    Append,         // >>
+    Input,          // <
+    HereDoc,        // <<
+    HereString,     // <<<
+    DupOutput,      // >&
+    DupInput,       // <&
+}
+
+#[derive(Debug)]
+pub enum RedirectTarget {
+    File(String),           // Regular file
+    Descriptor(i32),        // File descriptor number
+    HereDoc(String),        // Here document content
+    HereString(String),     // Here string content
 }

@@ -22,6 +22,9 @@ pub enum Operator {
     RedirectIn,     // <
     RedirectAppend, // >>
     RedirectError,  // 2>
+    RedirectHereDoc, // <<
+    RedirectHereStr, // <<<
+    RedirectDup,     // >&
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -76,10 +79,42 @@ impl<'a> Lexer<'a> {
 
     fn read_word(&mut self) -> String {
         let mut word = String::new();
+        let mut in_single_quote = false;
+        let mut in_double_quote = false;
         
         while let Some(c) = self.current {
-            match c {
-                ' ' | '\t' | '\n' | '|' | '&' | '>' | '<' | ';' => break,
+            match (c, in_single_quote, in_double_quote) {
+                ('\'', false, false) => {
+                    in_single_quote = true;
+                    self.advance();
+                }
+                ('\'', true, false) => {
+                    in_single_quote = false;
+                    self.advance();
+                }
+                ('"', false, false) => {
+                    in_double_quote = true;
+                    self.advance();
+                }
+                ('"', false, true) => {
+                    in_double_quote = false;
+                    self.advance();
+                }
+                ('\\', false, true) => {
+                    self.advance(); // consume backslash
+                    if let Some(next) = self.current {
+                        word.push(next);
+                        self.advance();
+                    }
+                }
+                ('\\', false, false) => {
+                    self.advance(); // consume backslash
+                    if let Some(next) = self.current {
+                        word.push(next);
+                        self.advance();
+                    }
+                }
+                (' ' | '\t' | '\n' | '|' | '&' | '>' | '<' | ';', false, false) => break,
                 _ => {
                     word.push(c);
                     self.advance();
@@ -107,6 +142,39 @@ impl<'a> Lexer<'a> {
 
     fn read_operator(&mut self) -> Token {
         match self.current {
+            Some('>') => {
+                self.advance();
+                match self.current {
+                    Some('>') => {
+                        self.advance();
+                        Token::Operator(Operator::RedirectAppend)
+                    }
+                    Some('&') => {
+                        self.advance();
+                        Token::Operator(Operator::RedirectDup)
+                    }
+                    _ => Token::Operator(Operator::RedirectOut)
+                }
+            }
+            Some('<') => {
+                self.advance();
+                match self.current {
+                    Some('<') => {
+                        self.advance();
+                        if self.current == Some('<') {
+                            self.advance();
+                            Token::Operator(Operator::RedirectHereStr)
+                        } else {
+                            Token::Operator(Operator::RedirectHereDoc)
+                        }
+                    }
+                    Some('&') => {
+                        self.advance();
+                        Token::Operator(Operator::RedirectDup)
+                    }
+                    _ => Token::Operator(Operator::RedirectIn)
+                }
+            }
             Some('|') => {
                 self.advance();
                 if self.current == Some('|') {
@@ -124,19 +192,6 @@ impl<'a> Lexer<'a> {
                 } else {
                     Token::Operator(Operator::Background)
                 }
-            }
-            Some('>') => {
-                self.advance();
-                if self.current == Some('>') {
-                    self.advance();
-                    Token::Operator(Operator::RedirectAppend)
-                } else {
-                    Token::Operator(Operator::RedirectOut)
-                }
-            }
-            Some('<') => {
-                self.advance();
-                Token::Operator(Operator::RedirectIn)
             }
             Some(';') => {
                 self.advance();

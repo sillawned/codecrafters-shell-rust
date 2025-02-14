@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::os::unix::fs::PermissionsExt;
 
 pub fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
     let cmd = cmd.trim();
@@ -27,7 +28,6 @@ pub fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
 }
 
 fn is_executable(path: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
     if let Ok(metadata) = path.metadata() {
         let mode = metadata.permissions().mode();
         return mode & 0o111 != 0; // Check for execute permission

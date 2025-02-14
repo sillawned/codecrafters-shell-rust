@@ -1,14 +1,45 @@
-use crate::ast::{ASTNode, RedirectMode};
-use crate::builtins;
-use crate::utils::{self, search_cmd};
+use std::io::Write;
 use std::process::ExitStatus;
 use std::os::unix::process::{ExitStatusExt, CommandExt};
-use crate::processor::{process_text, ProcessingMode};
+use crate::{
+    ast::{ASTNode, RedirectMode, RedirectTarget},
+    builtins,
+    utils::{self, search_cmd},
+    processor::{process_text, ProcessingMode},
+};
+use tempfile;
 
 pub struct Executor {
     last_status: i32,
     environment: std::collections::HashMap<String, String>,
     current_dir: std::path::PathBuf,
+}
+
+fn process_argument(arg: &str) -> String {
+    let mut result = String::new();
+    let mut chars = arg.chars().peekable();
+    let mut in_quotes = false;
+
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => {
+                in_quotes = !in_quotes;
+                continue;  // Skip the quote character
+            }
+            '\\' if !in_quotes => {
+                if let Some(next) = chars.next() {
+                    match next {
+                        'n' => result.push('\n'),
+                        't' => result.push('\t'),
+                        'r' => result.push('\r'),
+                        _ => result.push(next),
+                    }
+                }
+            }
+            _ => result.push(c),
+        }
+    }
+    result
 }
 
 fn execute_command(cmd: &mut std::process::Command) -> Result<ExitStatus, String> {
@@ -54,7 +85,7 @@ impl Executor {
             
                 if utils::is_builtin(name) {
                     let processed_args: Vec<String> = expanded_args.iter()
-                        .map(|arg| process_text(arg, ProcessingMode::Argument))
+                        .map(|arg| process_argument(arg))
                         .collect();
                     match builtins::execute_builtin(name, &processed_args) {
                         Ok(()) => Ok(ExitStatus::from_raw(0)),
@@ -64,14 +95,10 @@ impl Executor {
                         }
                     }
                 } else if let Some(cmd_path) = search_cmd(name, &paths) {
-                    let mut cmd = std::process::Command::new(&cmd_path);
+                    let mut cmd = std::process::Command::new(cmd_path);
                     let processed_args: Vec<String> = expanded_args.iter()
-                        .map(|arg| process_text(arg, ProcessingMode::Argument))
+                        .map(|arg| process_argument(arg))
                         .collect();
-                    
-                    #[cfg(debug_assertions)]
-                    println!("Executing command: {} with args: {:?}", cmd_path, processed_args);
-                    
                     cmd.args(&processed_args);
                     execute_command(&mut cmd)
                 } else {
@@ -79,51 +106,48 @@ impl Executor {
                     Ok(ExitStatus::from_raw(127))
                 }
             }
-            ASTNode::Redirect { command, fd, file, mode } => {
-                let expanded_file = self.expand_variables(file)?;
-                
-                // Create parent directories if they don't exist
-                if let Some(parent) = std::path::Path::new(&expanded_file).parent() {
-                    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-                }
+            ASTNode::Redirect { command, fd, target, mode } => {
+                match target {
+                    RedirectTarget::File(path) => {
+                        // Create parent directories if needed
+                        if let Some(parent) = std::path::Path::new(path).parent() {
+                            if !parent.as_os_str().is_empty() {
+                                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                            }
+                        }
 
-                // Execute the command with redirection
-                match &**command {
-                    ASTNode::Command { name, args } => {
-                        // First expand any variables in the arguments
-                        let expanded_args: Vec<String> = args.iter()
-                            .map(|arg| self.expand_variables(arg))
-                            .collect::<Result<_, _>>()?;
-
-                        let mut cmd = if utils::is_builtin(name) {
-                            return Err("Redirection not supported for builtins".to_string());
-                        } else if let Some(cmd_path) = search_cmd(name, &std::env::var("PATH").unwrap_or_default()) {
-                            let mut cmd = std::process::Command::new(cmd_path);
-                            cmd.args(&expanded_args);
-                            cmd
-                        } else {
-                            return Err(format!("{}: command not found", name));
-                        };
-
-                        // Set up the redirection
+                        // Set up the redirection file
                         let file = std::fs::OpenOptions::new()
                             .write(true)
                             .create(true)
-                            .truncate(true)
-                            .open(&expanded_file)
-                            .map_err(|e| format!("Failed to open {}: {}", expanded_file, e))?;
+                            .append(matches!(mode, RedirectMode::Append))
+                            .truncate(matches!(mode, RedirectMode::Overwrite))
+                            .open(path)
+                            .map_err(|e| format!("Failed to open {}: {}", path, e))?;
 
-                        match *fd {
-                            1 => { cmd.stdout(file); }
-                            2 => { cmd.stderr(file); }
-                            _ => return Err(format!("Invalid file descriptor: {}", fd)),
-                        }
-
-                        execute_command(&mut cmd)
-                    },
-                    _ => Err("Invalid command for redirection".to_string()),
+                        self.execute_with_redirection(command, *fd, file, mode)
+                    }
+                    RedirectTarget::Descriptor(target_fd) => {
+                        self.execute_with_fd_duplication(command, *fd, *target_fd)
+                    }
+                    RedirectTarget::HereDoc(content) => {
+                        // Create temporary file with heredoc content
+                        let mut temp_file = tempfile::NamedTempFile::new()
+                            .map_err(|e| format!("Failed to create temporary file: {}", e))?;
+                        std::io::Write::write_all(&mut temp_file, content.as_bytes())
+                            .map_err(|e| format!("Failed to write heredoc: {}", e))?;
+                        self.execute_with_redirection(command, *fd, temp_file.into_file(), mode)
+                    }
+                    RedirectTarget::HereString(content) => {
+                        // Similar to heredoc but with single string
+                        let mut temp_file = tempfile::NamedTempFile::new()
+                            .map_err(|e| format!("Failed to create temporary file: {}", e))?;
+                        writeln!(temp_file, "{}", content)
+                            .map_err(|e| format!("Failed to write here-string: {}", e))?;
+                        self.execute_with_redirection(command, *fd, temp_file.into_file(), mode)
+                    }
                 }
-            },
+            }
             ASTNode::Pipe { left, right } => {
                 // Preserve exit status of the rightmost command in a pipeline
                 let mut left_cmd = build_command(left)?;
@@ -217,6 +241,123 @@ impl Executor {
             }
         }
         Ok(result)
+    }
+
+    fn execute_with_redirection(&mut self, command: &ASTNode, fd: i32, file: std::fs::File, _mode: &RedirectMode) -> Result<ExitStatus, String> {
+        match command {
+            ASTNode::Command { name, args } => {
+                let expanded_args: Vec<String> = args.iter()
+                    .map(|arg| self.expand_variables(arg))
+                    .collect::<Result<_, _>>()?;
+
+                if utils::is_builtin(name) {
+                    if fd == 1 {
+                        self.execute_builtin_with_redirection(name, &expanded_args, Some(file))
+                    } else {
+                        Err("Redirection not supported for this file descriptor on builtins".to_string())
+                    }
+                } else if let Some(cmd_path) = search_cmd(name, &std::env::var("PATH").unwrap_or_default()) {
+                    let mut cmd = std::process::Command::new(cmd_path);
+                    let processed_args: Vec<String> = expanded_args.iter()
+                        .map(|arg| process_text(arg, ProcessingMode::Argument))
+                        .collect();
+                    cmd.args(&processed_args);
+
+                    match fd {
+                        0 => { cmd.stdin(file); }
+                        1 => { cmd.stdout(file); }
+                        2 => { cmd.stderr(file); }
+                        _ => return Err(format!("Invalid file descriptor: {}", fd)),
+                    }
+
+                    execute_command(&mut cmd)
+                } else {
+                    Err(format!("{}: command not found", name))
+                }
+            },
+            _ => Err("Invalid command for redirection".to_string()),
+        }
+    }
+
+    fn execute_builtin_with_redirection(&self, name: &str, args: &[String], output: Option<std::fs::File>) -> Result<ExitStatus, String> {
+        if let Some(file) = output {
+            use std::os::fd::IntoRawFd;
+            let old_stdout = unsafe { libc::dup(libc::STDOUT_FILENO) };
+            if old_stdout == -1 {
+                return Err("Failed to duplicate stdout".to_string());
+            }
+
+            // Replace stdout with our file
+            unsafe {
+                let file_fd = file.into_raw_fd();
+                if libc::dup2(file_fd, libc::STDOUT_FILENO) == -1 {
+                    libc::close(old_stdout);
+                    libc::close(file_fd);
+                    return Err("Failed to redirect stdout".to_string());
+                }
+                // Close the original file descriptor as it's no longer needed
+                libc::close(file_fd);
+            }
+
+            // Execute builtin
+            let result = builtins::execute_builtin(name, args);
+
+            // Restore original stdout
+            unsafe {
+                if libc::dup2(old_stdout, libc::STDOUT_FILENO) == -1 {
+                    libc::close(old_stdout);
+                    return Err("Failed to restore stdout".to_string());
+                }
+                libc::close(old_stdout);
+            }
+
+            match result {
+                Ok(()) => Ok(ExitStatus::from_raw(0)),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    Ok(ExitStatus::from_raw(1))
+                }
+            }
+        } else {
+            // Normal execution without redirection
+            match builtins::execute_builtin(name, args) {
+                Ok(()) => Ok(ExitStatus::from_raw(0)),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    Ok(ExitStatus::from_raw(1))
+                }
+            }
+        }
+    }
+
+    fn execute_with_fd_duplication(&mut self, command: &ASTNode, fd: i32, target_fd: i32) -> Result<ExitStatus, String> {
+        // Save the original file descriptor
+        let old_fd = unsafe { libc::dup(fd) };
+        if old_fd == -1 {
+            return Err("Failed to duplicate original file descriptor".to_string());
+        }
+
+        // Perform the duplication
+        unsafe {
+            if libc::dup2(target_fd, fd) == -1 {
+                libc::close(old_fd);
+                return Err("Failed to duplicate target file descriptor".to_string());
+            }
+        }
+
+        // Execute the command
+        let result = self.execute(command);
+
+        // Restore the original file descriptor
+        unsafe {
+            if libc::dup2(old_fd, fd) == -1 {
+                libc::close(old_fd);
+                return Err("Failed to restore original file descriptor".to_string());
+            }
+            libc::close(old_fd);
+        }
+
+        result
     }
 }
 

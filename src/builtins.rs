@@ -1,5 +1,4 @@
-use std::env;
-use std::path::Path;
+use std::{env, path::Path};
 use crate::utils::search_cmd;
 
 pub const BUILTINS: [&str; 15] = [

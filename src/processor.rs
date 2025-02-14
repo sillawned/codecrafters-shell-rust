@@ -9,34 +9,62 @@ pub enum ProcessingMode {
 pub fn process_text(text: &str, mode: ProcessingMode) -> String {
     let mut result = String::new();
     let mut chars = text.chars().peekable();
-    let mut in_quotes = false;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
     
     while let Some(c) = chars.next() {
-        match (mode, c, in_quotes) {
-            (_, '\'', _) => {
-                in_quotes = !in_quotes;
+        match (c, in_single_quote, in_double_quote) {
+            ('\'', false, false) => {
+                in_single_quote = true;
                 match mode {
                     ProcessingMode::Literal => result.push(c),
                     _ => {}
                 }
             }
-            (ProcessingMode::Path, '\\', false) => {
-                if let Some(next) = chars.next() {
-                    if next == ' ' || next == '\\' || next == '\'' || next == '"' {
-                        result.push(next);
-                    } else {
-                        result.push('\\');
-                        result.push(next);
-                    }
+            ('\'', true, false) => {
+                in_single_quote = false;
+                match mode {
+                    ProcessingMode::Literal => result.push(c),
+                    _ => {}
                 }
             }
-            (ProcessingMode::Argument, '\\', false) => {
+            ('"', false, false) => {
+                in_double_quote = true;
+                match mode {
+                    ProcessingMode::Literal => result.push(c),
+                    _ => {}
+                }
+            }
+            ('"', false, true) => {
+                in_double_quote = false;
+                match mode {
+                    ProcessingMode::Literal => result.push(c),
+                    _ => {}
+                }
+            }
+            ('\\', false, true) => {
                 if let Some(next) = chars.next() {
                     match next {
+                        '$' | '`' | '"' | '\\' => result.push(next),
                         'n' => result.push('\n'),
                         't' => result.push('\t'),
                         'r' => result.push('\r'),
-                        '\\' | ' ' | '\'' | '"' => result.push(next),
+                        _ => {
+                            if !in_double_quote {
+                                result.push('\\');
+                            }
+                            result.push(next);
+                        }
+                    }
+                }
+            }
+            ('\\', false, false) => {
+                if let Some(next) = chars.next() {
+                    match next {
+                        ' ' | '\'' | '"' | '\\' | '$' | '`' => result.push(next),
+                        'n' => result.push('\n'),
+                        't' => result.push('\t'),
+                        'r' => result.push('\r'),
                         _ => {
                             result.push('\\');
                             result.push(next);
@@ -44,13 +72,9 @@ pub fn process_text(text: &str, mode: ProcessingMode) -> String {
                     }
                 }
             }
-            (ProcessingMode::Command, '\\', false) => {
-                if let Some(next) = chars.next() {
-                    result.push(next);
-                }
-            }
-            (_, c, true) => result.push(c),  // Inside quotes, preserve everything
-            (_, c, false) => result.push(c),  // Outside quotes, normal character
+            (c, true, _) => result.push(c),  // In single quotes, preserve everything
+            (c, _, true) => result.push(c),  // In double quotes, preserve most things
+            (c, false, false) => result.push(c),  // Outside quotes, normal character
         }
     }
     result

@@ -1,9 +1,9 @@
-use std::string::String;
-use std::io::{self, Write};
-use std::env;
-use std::process::ExitStatus;
-use std::os::unix::process::ExitStatusExt;
-use libc;
+use std::{
+    io::{self, Write},
+    env,
+    process::ExitStatus,
+    os::unix::process::ExitStatusExt,
+};
 
 pub mod ast;
 pub mod builtins;
@@ -87,3 +87,6 @@ fn main() {
         input.clear();
     }
 }
+
+#[cfg(test)]
+mod tests;

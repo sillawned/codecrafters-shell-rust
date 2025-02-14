@@ -1,4 +1,4 @@
-use crate::ast::{ASTNode, RedirectMode};
+use crate::ast::{ASTNode, RedirectMode, RedirectTarget};
 use crate::lexer::{Token, Operator, QuoteType};
 
 pub fn parse(tokens: &[Token]) -> Result<ASTNode, String> {
@@ -26,6 +26,14 @@ impl<'a> Parser<'a> {
 
     fn peek_next(&self) -> Option<&Token> {
         self.tokens.get(self.pos + 1)
+    }
+
+    fn peek_prev(&self) -> Option<&Token> {
+        if self.pos > 0 {
+            self.tokens.get(self.pos - 1)
+        } else {
+            None
+        }
     }
 
     fn parse_command(&mut self) -> Result<ASTNode, String> {
@@ -59,6 +67,18 @@ impl<'a> Parser<'a> {
                     self.advance();
                 },
                 Token::Operator(Operator::RedirectOut) => {
+                    // Parse file descriptor if present before >
+                    let fd = if let Some(Token::Word(fd_str)) = self.peek_prev() {
+                        if let Ok(num) = fd_str.parse::<i32>() {
+                            words.pop(); // Remove fd from words
+                            num
+                        } else {
+                            1
+                        }
+                    } else {
+                        1
+                    };
+
                     self.advance();
                     if let Some(Token::Word(file)) = self.current_token() {
                         if words.is_empty() {
@@ -68,10 +88,18 @@ impl<'a> Parser<'a> {
                             name: words[0].clone(),
                             args: words[1..].to_vec(),
                         };
+                        
+                        // Check if it's a file descriptor redirection
+                        let target = if let Ok(target_fd) = file.parse::<i32>() {
+                            RedirectTarget::Descriptor(target_fd)
+                        } else {
+                            RedirectTarget::File(file.clone())
+                        };
+
                         return Ok(ASTNode::Redirect {
                             command: Box::new(command),
-                            fd: 1,
-                            file: file.clone(),
+                            fd,
+                            target,
                             mode: RedirectMode::Overwrite,
                         });
                     } else {
