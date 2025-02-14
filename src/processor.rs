@@ -12,6 +12,14 @@ pub fn process_text(text: &str, mode: ProcessingMode) -> String {
     let mut in_single_quote = false;
     let mut in_double_quote = false;
     
+    // Strip outer quotes if they exist
+    if text.starts_with('\'') && text.ends_with('\'') ||
+       text.starts_with('"') && text.ends_with('"') {
+        chars.next(); // Skip opening quote
+        let text = text[1..text.len()-1].to_string();
+        chars = text.chars().peekable();
+    }
+    
     while let Some(c) = chars.next() {
         match (c, in_single_quote, in_double_quote) {
             ('\'', false, false) => {
