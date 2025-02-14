@@ -44,7 +44,7 @@ pub fn execute(node: &ASTNode) -> Result<ExitStatus, String> {
                     if let Some(cmd_path) = search_cmd(name, &paths) {
                         let mut cmd = std::process::Command::new(&cmd_path);
                         cmd.args(args);
-                        Ok(cmd)
+                        Ok::<std::process::Command, String>(cmd)
                     } else {
                         eprintln!("{}: command not found", name);
                         return Ok(ExitStatus::from_raw(127));

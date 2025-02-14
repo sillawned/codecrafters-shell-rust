@@ -38,7 +38,7 @@ pub enum ASTNode {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum RedirectMode {
     Overwrite, // >
     Append,    // >>
