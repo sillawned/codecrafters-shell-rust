@@ -1,198 +1,165 @@
 use crate::ast::{ASTNode, RedirectMode};
-use crate::tokenizer::TokenType;
-use crate::processor::{process_text, ProcessingMode};
+use crate::lexer::{Token, Operator, QuoteType};
 
-pub fn parse(tokens: &Vec<TokenType>) -> Result<ASTNode, String> {
+pub fn parse(tokens: &[Token]) -> Result<ASTNode, String> {
     let mut iter = tokens.iter().peekable();
-    let ast = parse_sequence(&mut iter)?;
+    let mut nodes = Vec::new();
+    let mut current_command = Vec::new();
+    let mut current_word = String::new();
 
-    #[cfg(debug_assertions)]
-    println!("AST: {:?}", ast);
-
-    Ok(ast)
-}
-
-fn parse_sequence<'a, I>(tokens: &mut std::iter::Peekable<I>) -> Result<ASTNode, String>
-where
-    I: Iterator<Item = &'a TokenType>,
-{
-    let mut left = parse_logical(tokens)?;
-    while let Some(token) = tokens.peek() {
-        if let TokenType::Semicolon = token {
-            tokens.next(); // Consume the ";"
-            let right = parse_logical(tokens)?;
-            left = ASTNode::Semicolon {
-                left: Box::new(left),
-                right: Box::new(right),
-            };
-        } else {
-            break;
-        }
-    }
-    Ok(left)
-}
-
-fn parse_logical<'a, I>(tokens: &mut std::iter::Peekable<I>) -> Result<ASTNode, String>
-where
-    I: Iterator<Item = &'a TokenType>,
-{
-    let mut left = parse_pipeline(tokens)?;
-    while let Some(token) = tokens.peek() {
+    while let Some(token) = iter.next() {
         match token {
-            TokenType::LogicalAnd => {
-                tokens.next(); // Consume the "&&"
-                let right = parse_pipeline(tokens)?;
-                left = ASTNode::LogicalAnd {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                };
+            Token::Word(word) => {
+                current_word.push_str(word);
+                if !iter.peek().map_or(false, |t| matches!(t, Token::Quote(_))) {
+                    current_command.push(current_word.clone());
+                    current_word.clear();
+                }
             }
-            TokenType::LogicalOr => {
-                tokens.next(); // Consume the "||"
-                let right = parse_pipeline(tokens)?;
-                left = ASTNode::LogicalOr {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                };
+            Token::Quote(quote_type) => {
+                match quote_type {
+                    QuoteType::Single | QuoteType::Double => {
+                        if let Some(Token::Word(content)) = iter.next() {
+                            current_word.push_str(content);
+                            // Look for closing quote
+                            if let Some(Token::Quote(closing)) = iter.next() {
+                                if closing == quote_type {
+                                    current_command.push(current_word.clone());
+                                    current_word.clear();
+                                }
+                            }
+                        }
+                    }
+                    QuoteType::Escaped => {
+                        if let Some(Token::Word(next)) = iter.next() {
+                            current_word.push_str(next);
+                        }
+                    }
+                }
             }
-            _ => break,
+            Token::Operator(op) => {
+                if !current_command.is_empty() {
+                    nodes.push(create_command(&current_command)?);
+                    current_command.clear();
+                }
+                match op {
+                    Operator::RedirectOut => {
+                        if let Some(Token::Word(file)) = iter.next() {
+                            let command = nodes.pop().ok_or("No command before redirection")?;
+                            nodes.push(ASTNode::Redirect {
+                                command: Box::new(command),
+                                fd: 1,
+                                file: file.clone(),
+                                mode: RedirectMode::Overwrite,
+                            });
+                        }
+                    }
+                    Operator::Pipe => {
+                        if let Some(right) = parse_command(&mut iter)? {
+                            let left = nodes.pop().ok_or("No command before pipe")?;
+                            nodes.push(ASTNode::Pipe {
+                                left: Box::new(left),
+                                right: Box::new(right),
+                            });
+                        }
+                    }
+                    Operator::PipeAnd | Operator::And | Operator::Or | Operator::Background | Operator::RedirectIn | Operator::RedirectAppend | Operator::Semicolon | Operator::RedirectError => {
+                        return Err(format!("Operator {:?} not implemented", op));
+                    }
+                }
+            }
+            Token::Space | Token::NewLine => {
+                if !current_word.is_empty() {
+                    current_command.push(current_word.clone());
+                    current_word.clear();
+                }
+            }
         }
     }
-    Ok(left)
-}
 
-fn parse_pipeline<'a, I>(tokens: &mut std::iter::Peekable<I>) -> Result<ASTNode, String>
-where
-    I: Iterator<Item = &'a TokenType>,
-{
-    let mut left = parse_command_with_redirects(tokens)?;
-    while let Some(token) = tokens.peek() {
-        if let TokenType::Pipe = token {
-            tokens.next(); // Consume the "|"
-            let right = parse_command_with_redirects(tokens)?;
-            left = ASTNode::Pipe {
-                left: Box::new(left),
-                right: Box::new(right),
-            };
-        } else {
-            break;
-        }
+    if !current_command.is_empty() {
+        nodes.push(create_command(&current_command)?);
     }
-    Ok(left)
+
+    Ok(nodes.pop().ok_or("No valid command found")?)
 }
 
-fn parse_command_with_redirects<'a, I>(tokens: &mut std::iter::Peekable<I>) -> Result<ASTNode, String>
+fn parse_command<'a, I>(tokens: &mut I) -> Result<Option<ASTNode>, String>
 where
-    I: Iterator<Item = &'a TokenType>,
+    I: Iterator<Item = &'a Token>,
 {
-    let mut command = parse_command(tokens)?;
-    let mut fd = -1; // Default is no file descriptor
+    let mut command = Vec::new();
+    let mut in_command = true;
 
-    while let Some(token) = tokens.peek() {
+    while let Some(token) = tokens.next() {
         match token {
-            TokenType::FileDescriptor(num) => {
-                fd = *num;
-                tokens.next();
+            Token::Word(word) => {
+                command.push(word.clone());
             }
-            TokenType::RedirectionOperator(op) => {
-                tokens.next(); // Consume the redirection operator
-                if fd == -1 {
-                    fd = if op == "<" { 0 } else { 1 };
+            Token::Quote(qt) => match qt {
+                QuoteType::Single | QuoteType::Double => {
+                    if let Some(Token::Word(word)) = tokens.next() {
+                        command.push(word.clone());
+                        // Skip closing quote
+                        tokens.next();
+                    }
                 }
-                
-                // Skip spaces until we find a word or quoted string
-                while let Some(TokenType::Space) = tokens.peek() {
-                    tokens.next();
+                QuoteType::Escaped => {
+                    if let Some(Token::Word(word)) = tokens.next() {
+                        command.push(word.clone());
+                    }
                 }
-                
-                // Get the next token for the file path
-                match tokens.next() {
-                    Some(TokenType::Word(file)) |
-                    Some(TokenType::SingleQuotedString(file)) |
-                    Some(TokenType::DoubleQuotedString(file)) => {
-                        command = ASTNode::Redirect {
-                            command: Box::new(command),
+            },
+            Token::Operator(op) => match op {
+                Operator::Pipe => {
+                    let left = create_command(&command)?;
+                    if let Some(right) = parse_command(tokens)? {
+                        return Ok(Some(ASTNode::Pipe {
+                            left: Box::new(left),
+                            right: Box::new(right),
+                        }));
+                    }
+                    break;
+                }
+                Operator::RedirectOut => {
+                    let cmd = create_command(&command)?;
+                    if let Some(Token::Word(file)) = tokens.next() {
+                        return Ok(Some(ASTNode::Redirect {
+                            command: Box::new(cmd),
+                            fd: 1,
                             file: file.clone(),
-                            fd,
-                            mode: match op.as_str() {
-                                ">" => RedirectMode::Overwrite,
-                                ">>" => RedirectMode::Append,
-                                "<" => RedirectMode::Input,
-                                _ => return Err(format!("Unknown redirection operator: {}", op)),
-                            },
-                        };
-                        fd = -1;
+                            mode: RedirectMode::Overwrite,
+                        }));
                     }
-                    _ => return Err("Expected file after redirection operator".to_string()),
+                    break;
                 }
-            }
-            TokenType::Space => {
-                tokens.next();
-            }
-            _ => break,
-        }
-    }
-    Ok(command)
-}
-
-fn parse_command<'a, I>(tokens: &mut std::iter::Peekable<I>) -> Result<ASTNode, String>
-where
-    I: Iterator<Item = &'a TokenType>,
-{
-    let mut args = Vec::new();
-    let mut name = String::new();
-    let mut collecting_name = true;
-
-    while let Some(token) = tokens.peek() {
-        match token {
-            TokenType::Space => {
-                collecting_name = false;
-                tokens.next();
-            }
-            TokenType::Word(word) => {
-                if collecting_name {
-                    if name.is_empty() {
-                        name = word.clone();
-                    } else {
-                        name.push(' ');
-                        name.push_str(word);
-                    }
-                } else {
-                    args.push(word.clone());
+                _ => {
+                    in_command = false;
+                    break;
                 }
-                tokens.next();
-            }
-            TokenType::SingleQuotedString(word) |
-            TokenType::DoubleQuotedString(word) => {
-                if collecting_name {
-                    if name.is_empty() {
-                        name = word.clone();
-                    } else {
-                        name.push(' ');
-                        name.push_str(word);
-                    }
-                } else {
-                    args.push(word.clone());
-                }
-                tokens.next();
-            }
-            TokenType::DollarVar(_) | 
-            TokenType::CommandSubstitution(_) |
-            TokenType::Assignment(_, _) => {
-                collecting_name = false;
-                // ... rest of token handling ...
-            }
-            TokenType::Comment(_) => {
-                tokens.next();
+            },
+            Token::Space => continue,
+            _ => {
+                in_command = false;
                 break;
             }
-            _ => break,
         }
     }
 
-    if name.is_empty() {
-        Err("Expected command".to_string())
+    if in_command && !command.is_empty() {
+        Ok(Some(create_command(&command)?))
     } else {
-        Ok(ASTNode::Command { name, args })
+        Ok(None)
     }
+}
+
+fn create_command(words: &[String]) -> Result<ASTNode, String> {
+    if words.is_empty() {
+        return Err("Empty command".to_string());
+    }
+    
+    Ok(ASTNode::Command {
+        name: words[0].clone(),
+        args: words[1..].to_vec(),
+    })
 }

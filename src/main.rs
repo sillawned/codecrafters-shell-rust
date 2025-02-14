@@ -11,15 +11,14 @@ pub mod parser;
 pub mod tokenizer;
 pub mod utils;
 pub mod processor;
+pub mod lexer;
 
 fn main() {
     let stdin = io::stdin();
     let mut input = String::new();
 
-    // Set up signal handlers for SIGINT, SIGTSTP, etc.
     let mut last_status = ExitStatus::from_raw(0);
 
-    // Wait for user input
     loop {
         print!("$ ");
         io::stdout().flush().unwrap();
@@ -29,9 +28,9 @@ fn main() {
             continue;
         }
 
-        let tokens = tokenizer::tokenize(&input);
+        let tokens = lexer::lex(&input);
         #[cfg(debug_assertions)]
-        println!("Tokens: {:?}", tokens);
+        println!("Lexer tokens: {:?}", tokens);
 
         let ast = match parser::parse(&tokens) {
             Ok(ast) => ast,
@@ -51,7 +50,6 @@ fn main() {
             }
         }
 
-        // Make last exit status available to scripts
         env::set_var("?", last_status.code().unwrap_or(0).to_string());
 
         input.clear();
