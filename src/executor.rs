@@ -38,8 +38,9 @@ pub fn execute(node: &ASTNode) -> Result<ExitStatus, String> {
 
     match node {
         ASTNode::Command { name, args } => {
+            let paths = std::env::var("PATH").unwrap_or_default();
+            
             if utils::is_builtin(name) {
-                // Process arguments for builtins
                 let processed_args: Vec<String> = args.iter()
                     .map(|arg| process_argument(arg))
                     .collect();
@@ -50,22 +51,18 @@ pub fn execute(node: &ASTNode) -> Result<ExitStatus, String> {
                         Ok(ExitStatus::from_raw(1))
                     }
                 }
+            } else if let Some(cmd_path) = search_cmd(name, &paths) {
+                let mut cmd = std::process::Command::new(cmd_path);
+                let processed_args: Vec<String> = args.iter()
+                    .map(|arg| process_argument(arg))
+                    .collect();
+                cmd.args(&processed_args);
+                Ok(cmd.status().map_err(|e| e.to_string())?)
             } else {
-                let paths = std::env::var("PATH").unwrap_or_default();
-                if let Some(cmd_path) = search_cmd(name, &paths) {
-                    let mut cmd = std::process::Command::new(cmd_path);
-                    // Process each argument
-                    let processed_args: Vec<String> = args.iter()
-                        .map(|arg| process_argument(arg))
-                        .collect();
-                    cmd.args(&processed_args);
-                    Ok(cmd.status().map_err(|e| e.to_string())?)
-                } else {
-                    eprintln!("{}: command not found", name);
-                    Ok(ExitStatus::from_raw(127)) // 127 is standard for command not found
-                }
+                eprintln!("{}: command not found", name);
+                Ok(ExitStatus::from_raw(127))
             }
-        }
+        },
         ASTNode::Pipe { left, right } => {
             // Preserve exit status of the rightmost command in a pipeline
             let mut left_cmd = build_command(left)?;
@@ -78,27 +75,56 @@ pub fn execute(node: &ASTNode) -> Result<ExitStatus, String> {
             Ok(right_cmd.status().map_err(|e| e.to_string())?)
         }
         ASTNode::Redirect { command, fd, file, mode } => {
-            let mut cmd = build_command(command)?;
-            let file = std::fs::OpenOptions::new()
+            let mut cmd = match &**command {
+                ASTNode::Command { name, args } => {
+                    let paths = std::env::var("PATH").unwrap_or_default();
+                    if let Some(cmd_path) = search_cmd(name, &paths) {
+                        let mut cmd = std::process::Command::new(cmd_path);
+                        cmd.args(args);
+                        cmd
+                    } else {
+                        eprintln!("{}: command not found", name);
+                        return Ok(ExitStatus::from_raw(127));
+                    }
+                },
+                _ => return Err("Invalid redirection".to_string()),
+            };
+
+            // Bash-like file handling
+            let file_result = std::fs::OpenOptions::new()
                 .write(true)
                 .create(true)
                 .append(matches!(mode, RedirectMode::Append))
                 .truncate(!matches!(mode, RedirectMode::Append))
-                .open(file)
-                .map_err(|e| e.to_string())?;
+                .open(file);
 
-            match fd {
-                1 => cmd.stdout(file),
-                2 => cmd.stderr(file),
-                _ => return Err(format!("Unsupported file descriptor: {}", fd)),
-            };
-
-            let status = cmd.status().map_err(|e| e.to_string())?;
-            if !status.success() {
-                //return Err(format!("Redirection failed with status: {}", status));
+            match file_result {
+                Ok(file) => {
+                    match fd {
+                        1 => cmd.stdout(file),
+                        2 => cmd.stderr(file),
+                        _ => return Err(format!("Bad file descriptor: {}", fd)),
+                    };
+                    Ok(cmd.status().unwrap_or(ExitStatus::from_raw(1)))
+                },
+                Err(e) => {
+                    match e.kind() {
+                        std::io::ErrorKind::NotFound => {
+                            eprintln!("No such file or directory");
+                            Ok(ExitStatus::from_raw(1))
+                        },
+                        std::io::ErrorKind::PermissionDenied => {
+                            eprintln!("Permission denied");
+                            Ok(ExitStatus::from_raw(1))
+                        },
+                        _ => {
+                            eprintln!("{}", e);
+                            Ok(ExitStatus::from_raw(1))
+                        }
+                    }
+                }
             }
-            Ok(status)
-        }
+        },
         ASTNode::Background { command } => {
             let mut cmd = build_command(command)?;
             cmd.spawn().map_err(|e| e.to_string())?;

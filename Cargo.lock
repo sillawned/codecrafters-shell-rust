@@ -39,6 +39,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "ctrlc",
+ "libc",
  "thiserror",
 ]
 
