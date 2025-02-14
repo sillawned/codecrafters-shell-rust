@@ -37,6 +37,51 @@ pub fn execute(node: &ASTNode) -> Result<ExitStatus, String> {
     println!("Executing: {:?}", node);
 
     match node {
+        ASTNode::Redirect { command, fd, file, mode } => {
+            // Set up redirection first
+            let file_path = file.clone();
+            let file = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .append(matches!(mode, RedirectMode::Append))
+                .truncate(!matches!(mode, RedirectMode::Append))
+                .open(file_path);
+
+            match file {
+                Ok(file) => {
+                    // Then execute the command with redirection
+                    let mut cmd = match &**command {
+                        ASTNode::Command { name, args } => {
+                            let paths = std::env::var("PATH").unwrap_or_default();
+                            if let Some(cmd_path) = search_cmd(name, &paths) {
+                                let mut cmd = std::process::Command::new(cmd_path);
+                                cmd.args(args);
+                                match fd {
+                                    1 => cmd.stdout(file),
+                                    2 => cmd.stderr(file),
+                                    _ => return Err(format!("Bad file descriptor: {}", fd)),
+                                };
+                                Ok(cmd)
+                            } else {
+                                eprintln!("{}: command not found", name);
+                                return Ok(ExitStatus::from_raw(127));
+                            }
+                        },
+                        _ => Err("Invalid redirection".to_string()),
+                    }?;
+
+                    Ok(cmd.status().unwrap_or(ExitStatus::from_raw(1)))
+                },
+                Err(e) => {
+                    match e.kind() {
+                        _ => {
+                            eprintln!("{}", e);
+                            Ok(ExitStatus::from_raw(1))
+                        }
+                    }
+                }
+            }
+        },
         ASTNode::Command { name, args } => {
             let paths = std::env::var("PATH").unwrap_or_default();
             
@@ -74,57 +119,6 @@ pub fn execute(node: &ASTNode) -> Result<ExitStatus, String> {
 
             Ok(right_cmd.status().map_err(|e| e.to_string())?)
         }
-        ASTNode::Redirect { command, fd, file, mode } => {
-            let mut cmd = match &**command {
-                ASTNode::Command { name, args } => {
-                    let paths = std::env::var("PATH").unwrap_or_default();
-                    if let Some(cmd_path) = search_cmd(name, &paths) {
-                        let mut cmd = std::process::Command::new(cmd_path);
-                        cmd.args(args);
-                        cmd
-                    } else {
-                        eprintln!("{}: command not found", name);
-                        return Ok(ExitStatus::from_raw(127));
-                    }
-                },
-                _ => return Err("Invalid redirection".to_string()),
-            };
-
-            // Bash-like file handling
-            let file_result = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .append(matches!(mode, RedirectMode::Append))
-                .truncate(!matches!(mode, RedirectMode::Append))
-                .open(file);
-
-            match file_result {
-                Ok(file) => {
-                    match fd {
-                        1 => cmd.stdout(file),
-                        2 => cmd.stderr(file),
-                        _ => return Err(format!("Bad file descriptor: {}", fd)),
-                    };
-                    Ok(cmd.status().unwrap_or(ExitStatus::from_raw(1)))
-                },
-                Err(e) => {
-                    match e.kind() {
-                        std::io::ErrorKind::NotFound => {
-                            eprintln!("No such file or directory");
-                            Ok(ExitStatus::from_raw(1))
-                        },
-                        std::io::ErrorKind::PermissionDenied => {
-                            eprintln!("Permission denied");
-                            Ok(ExitStatus::from_raw(1))
-                        },
-                        _ => {
-                            eprintln!("{}", e);
-                            Ok(ExitStatus::from_raw(1))
-                        }
-                    }
-                }
-            }
-        },
         ASTNode::Background { command } => {
             let mut cmd = build_command(command)?;
             cmd.spawn().map_err(|e| e.to_string())?;
