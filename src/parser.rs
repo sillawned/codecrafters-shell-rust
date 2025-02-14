@@ -141,53 +141,50 @@ where
 {
     let mut args = Vec::new();
     let mut name = String::new();
+    let mut collecting_name = true;
 
     while let Some(token) = tokens.peek() {
         match token {
+            TokenType::Space => {
+                collecting_name = false;
+                tokens.next();
+            }
             TokenType::Word(word) => {
-                if name.is_empty() {
-                    name = word.clone();
+                if collecting_name {
+                    if name.is_empty() {
+                        name = word.clone();
+                    } else {
+                        name.push(' ');
+                        name.push_str(word);
+                    }
                 } else {
                     args.push(word.clone());
                 }
                 tokens.next();
             }
-            TokenType::SingleQuotedString(word) => {
-                let value = word.clone(); // Preserve literal value
-                if name.is_empty() {
-                    name = value;
-                } else {
-                    args.push(value);
-                }
-                tokens.next();
-            }
+            TokenType::SingleQuotedString(word) |
             TokenType::DoubleQuotedString(word) => {
-                let value = word.clone(); // May contain escaped characters
-                if name.is_empty() {
-                    name = value;
+                if collecting_name {
+                    if name.is_empty() {
+                        name = word.clone();
+                    } else {
+                        name.push(' ');
+                        name.push_str(word);
+                    }
                 } else {
-                    args.push(value);
+                    args.push(word.clone());
                 }
                 tokens.next();
             }
-            TokenType::DollarVar(var) => {
-                args.push(format!("${}", var));
-                tokens.next();
-            }
-            TokenType::CommandSubstitution(cmd) => {
-                args.push(format!("$({})", cmd));
-                tokens.next();
-            }
-            TokenType::Assignment(var, val) => {
-                args.push(format!("{}={}", var, val));
-                tokens.next();
+            TokenType::DollarVar(_) | 
+            TokenType::CommandSubstitution(_) |
+            TokenType::Assignment(_, _) => {
+                collecting_name = false;
+                // ... rest of token handling ...
             }
             TokenType::Comment(_) => {
                 tokens.next();
                 break;
-            }
-            TokenType::Space => {
-                tokens.next(); // Consume the space
             }
             _ => break,
         }
