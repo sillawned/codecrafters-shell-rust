@@ -73,6 +73,8 @@ fn main() {
                 continue;
             }
         };
+        #[cfg(debug_assertions)]
+        println!("AST: {:?}", &ast);
 
         let mut executor = executor::Executor::new();
         match executor.execute(&ast) {
