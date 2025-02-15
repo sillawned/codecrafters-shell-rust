@@ -25,6 +25,10 @@ impl Word {
             WordPart::Simple(s) => s.clone(),
             WordPart::SingleQuoted(s) => s.clone(),
             WordPart::DoubleQuoted(s) => {
+                // FIXME: Within double quotes:
+                // 1. Preserve backslashes that escape special chars (", \, $, `)
+                // 2. Keep backslash-escaped backslashes as single backslash
+                // 3. Keep regular backslashes as backslashes
                 let mut result = String::new();
                 let mut chars = s.chars().peekable();
                 while let Some(c) = chars.next() {
@@ -32,12 +36,19 @@ impl Word {
                         '\\' => {
                             if let Some(&next) = chars.peek() {
                                 match next {
+                                    // Special chars that can be escaped in double quotes
                                     '"' | '\\' | '$' | '`' => {
                                         chars.next();
+                                        if next == '\\' {
+                                            result.push('\\');
+                                        }
                                         result.push(next);
                                     },
-                                    _ => result.push(c)
+                                    // Any other backslash is preserved literally
+                                    _ => result.push('\\')
                                 }
+                            } else {
+                                result.push('\\');
                             }
                         },
                         _ => result.push(c)
