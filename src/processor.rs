@@ -31,6 +31,7 @@ pub fn process_text(text: &str, mode: ProcessingMode) -> String {
             ('\'', false, false) => {
                 in_single_quote = true;
                 match mode {
+                    ProcessingMode::Command => result.push(c),
                     ProcessingMode::Literal => result.push(c),
                     _ => {}
                 }
@@ -38,6 +39,7 @@ pub fn process_text(text: &str, mode: ProcessingMode) -> String {
             ('\'', true, false) => {
                 in_single_quote = false;
                 match mode {
+                    ProcessingMode::Command => result.push(c),
                     ProcessingMode::Literal => result.push(c),
                     _ => {}
                 }
@@ -45,6 +47,7 @@ pub fn process_text(text: &str, mode: ProcessingMode) -> String {
             ('"', false, false) => {
                 in_double_quote = true;
                 match mode {
+                    ProcessingMode::Command => result.push(c),
                     ProcessingMode::Literal => result.push(c),
                     _ => {}
                 }
@@ -52,37 +55,26 @@ pub fn process_text(text: &str, mode: ProcessingMode) -> String {
             ('"', false, true) => {
                 in_double_quote = false;
                 match mode {
+                    ProcessingMode::Command => result.push(c),
                     ProcessingMode::Literal => result.push(c),
                     _ => {}
                 }
             }
-            ('\\', false, true) => {
+            ('\\', _, _) => {
                 if let Some(next) = chars.next() {
-                    match next {
-                        '$' | '`' | '"' | '\\' => result.push(next),
-                        'n' => result.push('\n'),
-                        't' => result.push('\t'),
-                        'r' => result.push('\r'),
-                        _ => {
-                            if !in_double_quote {
-                                result.push('\\');
-                            }
-                            result.push(next);
-                        }
-                    }
-                }
-            }
-            ('\\', false, false) => {
-                if let Some(next) = chars.next() {
-                    match next {
-                        ' ' | '\'' | '"' | '\\' | '$' | '`' => result.push(next),
-                        'n' => result.push('\n'),
-                        't' => result.push('\t'),
-                        'r' => result.push('\r'),
-                        _ => {
+                    match (next, mode) {
+                        ('\'', ProcessingMode::Command) |
+                        ('"', ProcessingMode::Command) => {
+                            result.push(next); // Keep quotes in command names
+                        },
+                        ('\'', _) | ('"', _) => {
                             result.push('\\');
                             result.push(next);
-                        }
+                        },
+                        ('n', _) => result.push('\n'),
+                        ('t', _) => result.push('\t'),
+                        ('r', _) => result.push('\r'),
+                        (c, _) => result.push(c),
                     }
                 }
             }

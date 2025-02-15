@@ -1,6 +1,8 @@
 use std::path::Path;
 use std::os::unix::fs::PermissionsExt;
 
+use crate::processor::{process_text, ProcessingMode};
+
 pub fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
     let cmd = if cmd.starts_with('"') || cmd.starts_with('\'') {
         // Process the command name to handle escaped quotes
@@ -8,17 +10,17 @@ pub fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
         // Strip outer quotes
         let len = processed.len();
         if len >= 2 {
-            &processed[1..len-1]
+            processed[1..len-1].to_string()
         } else {
-            &processed
+            processed
         }
     } else {
-        cmd
-    }.trim();
+        cmd.to_string()
+    }.trim().to_string();
     
     // If command contains a slash, use it directly without PATH search
     if cmd.contains('/') {
-        let path = Path::new(cmd);
+        let path = Path::new(&cmd);
         if path.exists() && is_executable(path) {
             return Some(cmd.to_string());
         }
