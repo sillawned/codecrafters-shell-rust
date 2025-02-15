@@ -184,27 +184,19 @@ impl Executor {
     fn expand_variables(&self, arg: &str) -> Result<String, String> {
         let mut result = String::new();
         let mut chars = arg.chars().peekable();
-        let mut escape_next = false;
         
         while let Some(c) = chars.next() {
-            match (c, escape_next) {
-                (c, true) => {
-                    // Keep both the backslash and the escaped character
-                    result.push('\\');
-                    result.push(c);
-                    escape_next = false;
-                }
-                ('\\', false) => {
-                    escape_next = true;
-                }
-                ('$', false) => {
+            match c {
+                // ONLY handle variable expansion, no escape processing
+                '$' => {
                     let var_name = self.read_variable_name(&mut chars)?;
                     let value = self.environment.get(&var_name)
                         .map(|s| s.as_str())
                         .unwrap_or("");
                     result.push_str(value);
                 }
-                (c, false) => result.push(c),
+                // Pass through all other characters unchanged
+                c => result.push(c),
             }
         }
         Ok(result)
