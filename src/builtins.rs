@@ -60,12 +60,19 @@ pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
                 .map_err(|_| format!("cd: {}: No such file or directory", raw_path))
         },
         "type" => {
+            if args.is_empty() {
+                return Err("type: not enough arguments".to_string());
+            }
             if BUILTINS.contains(&args[0].as_str()) {
                 println!("{} is a shell builtin", args[0]);
-            } else if let Some(cmd_path) = search_cmd(&args[0], &std::env::var("PATH").unwrap()) {
-                println!("{} is {}", args[0], cmd_path);
             } else {
-                println!("{}: not found", args[0]);
+                // Get PATH or use empty string if not set
+                let path = env::var("PATH").unwrap_or_default();
+                if let Some(cmd_path) = search_cmd(&args[0], &path) {
+                    println!("{} is {}", args[0], cmd_path);
+                } else {
+                    println!("{}: not found", args[0]);
+                }
             }
             Ok(())
         }
