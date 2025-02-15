@@ -77,7 +77,7 @@ impl Executor {
                             }
                         }
 
-                        // Set up the redirection file
+                        // Set up the redirection file with append mode
                         let file = std::fs::OpenOptions::new()
                             .write(true)
                             .create(true)
