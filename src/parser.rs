@@ -68,22 +68,14 @@ impl<'a> Parser<'a> {
                     }
                     self.advance();
                 },
-                Token::Operator(Operator::RedirectOut | Operator::RedirectAppend) => {
-                    // Parse file descriptor if present before > or >>
-                    let fd = if let Some(Token::Word(fd_str)) = self.peek_prev() {
-                        if let Ok(num) = fd_str.parse::<i32>() {
-                            words.pop(); // Remove fd from words
-                            num
-                        } else {
-                            1
-                        }
-                    } else {
-                        1
-                    };
-
-                    let mode = match token {
-                        Token::Operator(Operator::RedirectAppend) => RedirectMode::Append,
-                        _ => RedirectMode::Overwrite,
+                Token::Operator(Operator::RedirectOut | Operator::RedirectAppend | 
+                                Operator::RedirectError | Operator::RedirectErrorAppend) => {
+                    let (fd, mode) = match token {
+                        Token::Operator(Operator::RedirectOut) => (1, RedirectMode::Overwrite),
+                        Token::Operator(Operator::RedirectAppend) => (1, RedirectMode::Append),
+                        Token::Operator(Operator::RedirectError) => (2, RedirectMode::Overwrite),
+                        Token::Operator(Operator::RedirectErrorAppend) => (2, RedirectMode::Append),
+                        _ => unreachable!()
                     };
 
                     self.advance();
