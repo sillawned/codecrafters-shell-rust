@@ -143,18 +143,33 @@ impl<'a> Lexer<'a> {
 
     fn read_operator(&mut self) -> Token {
         match self.current {
-            Some('2') => {
+            Some(c) if c.is_ascii_digit() => {
+                let num = c.to_digit(10).unwrap() as i32;
                 self.advance();
+                
                 if self.current == Some('>') {
                     self.advance();
-                    if self.current == Some('>') {
-                        self.advance();
-                        Token::Operator(Operator::RedirectErrorAppend)
-                    } else {
-                        Token::Operator(Operator::RedirectError)
+                    match self.current {
+                        Some('>') => {
+                            self.advance();
+                            match num {
+                                1 => Token::Operator(Operator::RedirectAppend),
+                                2 => Token::Operator(Operator::RedirectErrorAppend),
+                                n => {
+                                    // First put back the number and >> as a Word
+                                    let mut word = n.to_string();
+                                    word.push_str(">>");
+                                    Token::Word(word)
+                                }
+                            }
+                        }
+                        _ => match num {
+                            2 => Token::Operator(Operator::RedirectError),
+                            _ => Token::Operator(Operator::RedirectOut) // Treat n> as >
+                        }
                     }
                 } else {
-                    Token::Word("2".to_string())
+                    Token::Word(num.to_string())
                 }
             },
             Some('>') => {
