@@ -107,18 +107,20 @@ impl RustylineCompleter for Completer {
         pos: usize,
         _ctx: &Context<'_>,
     ) -> Result<(usize, Vec<Pair>)> {
-        // Find the word start position
         let start = line[..pos].rfind(char::is_whitespace).map_or(0, |i| i + 1);
-        
-        // Get completions
         let completions = self.complete(&line[start..pos]);
         
-        // Convert to Pairs
         let pairs: Vec<Pair> = completions
             .into_iter()
-            .map(|s| Pair {
-                display: s.clone(),
-                replacement: s,
+            .map(|s| {
+                let display = s.clone();
+                // Add a space to the replacement unless it ends with a directory separator
+                let replacement = if s.ends_with('/') {
+                    s
+                } else {
+                    format!("{} ", s)
+                };
+                Pair { display, replacement }
             })
             .collect();
 
