@@ -14,6 +14,7 @@ pub mod utils;
 pub mod processor;
 pub mod lexer;
 pub mod types;
+pub mod word;
 
 fn main() {
     // Set up signal handlers like bash

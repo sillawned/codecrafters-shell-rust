@@ -16,33 +16,6 @@ pub struct Executor {
     current_dir: std::path::PathBuf,
 }
 
-fn process_argument(arg: &str) -> String {
-    let mut result = String::new();
-    let mut chars = arg.chars().peekable();
-    let mut in_quotes = false;
-
-    while let Some(c) = chars.next() {
-        match c {
-            '"' => {
-                in_quotes = !in_quotes;
-                continue;  // Skip the quote character
-            }
-            '\\' if !in_quotes => {
-                if let Some(next) = chars.next() {
-                    match next {
-                        'n' => result.push('\n'),
-                        't' => result.push('\t'),
-                        'r' => result.push('\r'),
-                        _ => result.push(next),
-                    }
-                }
-            }
-            _ => result.push(c),
-        }
-    }
-    result
-}
-
 fn execute_command(cmd: &mut std::process::Command) -> Result<ExitStatus, String> {
     // Set up process group
     unsafe {

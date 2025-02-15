@@ -1,6 +1,9 @@
 use std::iter::Peekable;
 use std::str::Chars;
-use crate::types::QuoteType;
+use crate::{
+    types::QuoteType,
+    word::{Word, WordPart},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -72,48 +75,69 @@ impl<'a> Lexer<'a> {
     }
 
     fn read_word(&mut self) -> String {
-        let mut word = String::new();
+        let mut word = Word::new();
+        let mut current = String::new();
         let mut in_single_quote = false;
         let mut in_double_quote = false;
+        let mut escape_next = false;
         
         while let Some(c) = self.current {
-            match (c, in_single_quote, in_double_quote) {
-                ('\'', false, false) => {
-                    in_single_quote = true;
-                    word.push(c);
+            match (c, escape_next, in_single_quote, in_double_quote) {
+                (c, true, _, _) => {
+                    current.push(c);
+                    escape_next = false;
                     self.advance();
-                }
-                ('\'', true, false) => {
-                    in_single_quote = false;
-                    word.push(c);
+                },
+                ('\\', false, false, true) | ('\\', false, false, false) => {
+                    escape_next = true;
+                    current.push(c);
                     self.advance();
-                }
-                ('"', false, false) => {
-                    in_double_quote = true;
-                    word.push(c);
-                    self.advance();
-                }
-                ('"', false, true) => {
-                    in_double_quote = false;
-                    word.push(c);
-                    self.advance();
-                }
-                ('\\', _, _) => {
-                    word.push(c);
-                    self.advance();
-                    if let Some(next) = self.current {
-                        word.push(next);
-                        self.advance();
+                },
+                ('\'', false, false, false) => {
+                    if !current.is_empty() {
+                        word.add_part(WordPart::Simple(current));
+                        current = String::new();
                     }
-                }
-                (' ' | '\t' | '\n' | '|' | '&' | '>' | '<' | ';', false, false) => break,
-                _ => {
-                    word.push(c);
+                    in_single_quote = true;
+                    self.advance();
+                },
+                ('\'', false, true, false) => {
+                    word.add_part(WordPart::SingleQuoted(current));
+                    current = String::new();
+                    in_single_quote = false;
+                    self.advance();
+                },
+                ('"', false, false, false) => {
+                    if !current.is_empty() {
+                        word.add_part(WordPart::Simple(current));
+                        current = String::new();
+                    }
+                    in_double_quote = true;
+                    self.advance();
+                },
+                ('"', false, false, true) => {
+                    word.add_part(WordPart::DoubleQuoted(current));
+                    current = String::new();
+                    in_double_quote = false;
+                    self.advance();
+                },
+                (' ' | '\t' | '\n' | '|' | '&' | '>' | '<' | ';', false, false, false) => break,
+                (c, _, _, _) => {
+                    current.push(c);
                     self.advance();
                 }
             }
         }
-        word
+
+        if !current.is_empty() {
+            match (in_single_quote, in_double_quote) {
+                (true, _) => word.add_part(WordPart::SingleQuoted(current)),
+                (_, true) => word.add_part(WordPart::DoubleQuoted(current)),
+                _ => word.add_part(WordPart::Simple(current)),
+            }
+        }
+
+        word.to_string()
     }
 
     // Add new function to handle special parameters
