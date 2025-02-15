@@ -141,20 +141,20 @@ impl<'a> Lexer<'a> {
     }
 
     // Add new function to handle special parameters
-    fn read_special_param(&mut self) -> Option<Token> {
-        self.advance(); // consume $
-        match self.current {
-            Some('?') => {
-                self.advance();
-                Some(Token::Word(std::env::var("?").unwrap_or_else(|_| "0".to_string())))
-            },
-            Some('#') => {
-                self.advance();
-                Some(Token::Word("0".to_string())) // Placeholder for arg count
-            },
-            _ => None
-        }
-    }
+    // fn read_special_param(&mut self) -> Option<Token> {
+    //     self.advance(); // consume $
+    //     match self.current {
+    //         Some('?') => {
+    //             self.advance();
+    //             Some(Token::Word(std::env::var("?").unwrap_or_else(|_| "0".to_string())))
+    //         },
+    //         Some('#') => {
+    //             self.advance();
+    //             Some(Token::Word("0".to_string())) // Placeholder for arg count
+    //         },
+    //         _ => None
+    //     }
+    // }
 
     fn read_operator(&mut self) -> Token {
         match self.current {
@@ -230,9 +230,9 @@ impl<'a> Lexer<'a> {
         self.current = self.input.next();
     }
 
-    fn peek(&mut self) -> Option<char> {
-        self.input.peek().copied()
-    }
+    // fn peek(&mut self) -> Option<char> {
+    //     self.input.peek().copied()
+    // }
 }
 
 pub fn lex(input: &str) -> Vec<Token> {

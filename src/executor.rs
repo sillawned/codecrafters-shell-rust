@@ -8,6 +8,7 @@ use crate::{
 };
 use tempfile;
 
+#[allow(dead_code)]
 pub struct Executor {
     last_status: i32,
     environment: std::collections::HashMap<String, String>,

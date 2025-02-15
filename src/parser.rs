@@ -68,8 +68,8 @@ impl<'a> Parser<'a> {
                     }
                     self.advance();
                 },
-                Token::Operator(Operator::RedirectOut) => {
-                    // Parse file descriptor if present before >
+                Token::Operator(Operator::RedirectOut | Operator::RedirectAppend) => {
+                    // Parse file descriptor if present before > or >>
                     let fd = if let Some(Token::Word(fd_str)) = self.peek_prev() {
                         if let Ok(num) = fd_str.parse::<i32>() {
                             words.pop(); // Remove fd from words
@@ -79,6 +79,11 @@ impl<'a> Parser<'a> {
                         }
                     } else {
                         1
+                    };
+
+                    let mode = match token {
+                        Token::Operator(Operator::RedirectAppend) => RedirectMode::Append,
+                        _ => RedirectMode::Overwrite,
                     };
 
                     self.advance();
@@ -102,7 +107,7 @@ impl<'a> Parser<'a> {
                             command: Box::new(command),
                             fd,
                             target,
-                            mode: RedirectMode::Overwrite,
+                            mode,
                         });
                     } else {
                         return Err("Expected filename after redirection".to_string());

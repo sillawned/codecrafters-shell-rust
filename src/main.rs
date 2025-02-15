@@ -25,6 +25,7 @@ fn main() {
 
     let stdin = io::stdin();
     let mut input = String::new();
+    #[allow(unused_assignments)]
     let mut last_status = ExitStatus::from_raw(0);
 
     // Set initial environment variables
@@ -63,6 +64,7 @@ fn main() {
         #[cfg(debug_assertions)]
         println!("Lexer tokens: {:?}", tokens);
 
+        #[allow(unused_assignments)]
         let ast = match parser::parse(&tokens) {
             Ok(ast) => ast,
             Err(e) => {

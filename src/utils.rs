@@ -1,8 +1,6 @@
 use std::path::Path;
 use std::os::unix::fs::PermissionsExt;
 
-use crate::processor::{process_text, ProcessingMode};
-
 pub fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
     let binding = if cmd.starts_with('"') || cmd.starts_with('\'') {
         // First unescape any escaped quotes
