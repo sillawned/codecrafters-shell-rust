@@ -208,11 +208,11 @@ impl Executor {
                         .unwrap_or("");
                     result.push_str(value);
                 }
-                // '\\' => {
-                //     if let Some(next) = chars.next() {
-                //         result.push(next);
-                //     }
-                // }
+                '\\' => {
+                    if let Some(next) = chars.next() {
+                        result.push(next);
+                    }
+                }
                 _ => result.push(c),
             }
         }
