@@ -5,6 +5,9 @@ use std::{
     os::unix::process::ExitStatusExt,
 };
 
+use rustyline::error::ReadlineError;
+use rustyline::{Editor, Result};
+
 pub mod ast;
 pub mod builtins;
 pub mod executor;
@@ -14,6 +17,7 @@ pub mod processor;
 pub mod lexer;
 pub mod types;
 pub mod word;
+pub mod completion;
 
 fn main() {
     // Set up signal handlers like bash
@@ -23,8 +27,10 @@ fn main() {
         libc::signal(libc::SIGTSTP, libc::SIG_IGN);
     }
 
-    let stdin = io::stdin();
-    let mut input = String::new();
+    let completer = completion::Completer::new();
+    let mut rl = Editor::new().unwrap();
+    rl.set_helper(Some(completer));
+    
     #[allow(unused_assignments)]
     let mut last_status = ExitStatus::from_raw(0);
 
@@ -38,58 +44,49 @@ fn main() {
     loop {
         // Update PS1 for prompt
         let prompt = env::var("PS1").unwrap_or_else(|_| "$ ".to_string());
-        print!("{}", prompt);
-        io::stdout().flush().unwrap();
-
-        input.clear();  // Clear before reading new input
-        match stdin.read_line(&mut input) {
-            Ok(0) => {
-                // EOF (Ctrl+D)
-                println!();
-                break;
-            }
-            Ok(_) => {
-                // Skip empty lines but still show prompt
-                if input.trim().is_empty() {
+        
+        match rl.readline(&prompt) {
+            Ok(line) => {
+                let _ = rl.add_history_entry(line.as_str());
+                if line.trim().is_empty() {
                     continue;
                 }
-            }
-            Err(e) => {
-                eprintln!("Error reading input: {}", e);
-                continue;
+                
+                let tokens = lexer::lex(&line);
+                #[cfg(debug_assertions)]
+                println!("Lexer tokens: {:?}", tokens);
+
+                #[allow(unused_assignments)]
+                let ast = match parser::parse(&tokens) {
+                    Ok(ast) => ast,
+                    Err(e) => {
+                        eprintln!("Parse error: {}", e);
+                        last_status = ExitStatus::from_raw(2);
+                        continue;
+                    }
+                };
+                #[cfg(debug_assertions)]
+                println!("AST: {:?}", &ast);
+
+                let mut executor = executor::Executor::new();
+                match executor.execute(&ast) {
+                    Ok(status) => last_status = status,
+                    Err(e) => {
+                        eprintln!("{}", e);
+                        last_status = ExitStatus::from_raw(1);
+                    }
+                }
+
+                // Update status variable like bash
+                env::set_var("?", last_status.code().unwrap_or(0).to_string());
+            },
+            Err(ReadlineError::Interrupted) => continue,
+            Err(ReadlineError::Eof) => break,
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                break;
             }
         }
-
-        let tokens = lexer::lex(&input);
-        #[cfg(debug_assertions)]
-        println!("Lexer tokens: {:?}", tokens);
-
-        #[allow(unused_assignments)]
-        let ast = match parser::parse(&tokens) {
-            Ok(ast) => ast,
-            Err(e) => {
-                eprintln!("Parse error: {}", e);
-                last_status = ExitStatus::from_raw(2);
-                input.clear();
-                continue;
-            }
-        };
-        #[cfg(debug_assertions)]
-        println!("AST: {:?}", &ast);
-
-        let mut executor = executor::Executor::new();
-        match executor.execute(&ast) {
-            Ok(status) => last_status = status,
-            Err(e) => {
-                eprintln!("{}", e);
-                last_status = ExitStatus::from_raw(1);
-            }
-        }
-
-        // Update status variable like bash
-        env::set_var("?", last_status.code().unwrap_or(0).to_string());
-
-        input.clear();
     }
 }
 
