@@ -3,9 +3,15 @@ use std::os::unix::fs::PermissionsExt;
 
 pub fn search_cmd(cmd: &str, paths: &str) -> Option<String> {
     let cmd = if cmd.starts_with('"') || cmd.starts_with('\'') {
-        // Strip quotes from command name
-        let len = cmd.len();
-        &cmd[1..len-1]
+        // Process the command name to handle escaped quotes
+        let processed = process_text(cmd, ProcessingMode::Command);
+        // Strip outer quotes
+        let len = processed.len();
+        if len >= 2 {
+            &processed[1..len-1]
+        } else {
+            &processed
+        }
     } else {
         cmd
     }.trim();
