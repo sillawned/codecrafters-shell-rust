@@ -61,6 +61,8 @@ impl Executor {
                     let mut cmd = std::process::Command::new(cmd_path);
                     cmd.arg0(&processed_name);
                     cmd.args(&expanded_args);
+                    // Handle output redirection for external commands
+                    cmd.stdout(std::process::Stdio::inherit());
                     execute_command(&mut cmd)
                 } else {
                     eprintln!("{}: command not found", processed_name);
