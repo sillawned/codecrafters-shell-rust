@@ -61,6 +61,7 @@ impl Executor {
                     }
                 } else if let Some(cmd_path) = search_cmd(&processed_name, &std::env::var("PATH").unwrap_or_default()) {
                     let mut cmd = std::process::Command::new(cmd_path);
+                    cmd.arg0(&processed_name);
                     cmd.args(&expanded_args);
                     execute_command(&mut cmd)
                 } else {
