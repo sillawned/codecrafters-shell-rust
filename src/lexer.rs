@@ -64,6 +64,13 @@ impl<'a> Lexer<'a> {
                     self.advance();
                     return Some(Token::NewLine);
                 }
+                '0'..='9' => {
+                    // Peek ahead to see if this is a redirection
+                    if let Some(&'>') = self.input.peek() {
+                        return Some(self.read_operator());
+                    }
+                    return Some(Token::Word(self.read_word()));
+                }
                 '|' | '&' | '>' | '<' | ';' => {
                     return Some(self.read_operator());
                 }
