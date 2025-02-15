@@ -50,19 +50,19 @@ impl Executor {
 
                 let expanded_args: Vec<String> = args.iter()
                     .map(|arg| self.expand_variables(arg))
-                    // .map(|arg| {
-                    //     arg.map(|s| match get_quote_type(&s) {
-                    //         // FIXME: This is where quotes are being stripped incorrectly
-                    //         // We should:
-                    //         // 1. NOT strip quotes from single-quoted strings
-                    //         // 2. Process double-quoted strings through Word processor
-                    //         // 3. Let Word::to_string handle the escaping logic
-                    //         // 4. Remove this quote stripping logic entirely
-                    //         QuoteType::Single => s[1..s.len()-1].to_string(),
-                    //         QuoteType::Double | QuoteType::Escaped => process_text(&s, ProcessingMode::Argument),
-                    //         QuoteType::None => s
-                    //     })
-                    // })
+                    .map(|arg| {
+                        arg.map(|s| match get_quote_type(&s) {
+                            // FIXME: This is where quotes are being stripped incorrectly
+                            // We should:
+                            // 1. NOT strip quotes from single-quoted strings
+                            // 2. Process double-quoted strings through Word processor
+                            // 3. Let Word::to_string handle the escaping logic
+                            // 4. Remove this quote stripping logic entirely
+                            QuoteType::Single => s[1..s.len()-1].to_string(),
+                            QuoteType::Double | QuoteType::Escaped => process_text(&s, ProcessingMode::Argument),
+                            QuoteType::None => s
+                        })
+                    })
                     .collect::<Result<_, _>>()?;
 
                 if utils::is_builtin(&processed_name) {
