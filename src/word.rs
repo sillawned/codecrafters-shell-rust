@@ -22,14 +22,8 @@ impl Word {
 
     pub fn to_string(&self) -> String {
         self.parts.iter().map(|part| match part {
-            WordPart::Simple(s) => s.clone(),
-            WordPart::SingleQuoted(s) => s.clone(),
-            WordPart::DoubleQuoted(s) => {
-                // TODO: The main issue is here
-                // 1. Inside double quotes, we should:
-                //    - Keep single quotes as literal quotes: 'world' -> 'world'
-                //    - Keep escaped backslashes: \\' -> \'
-                //    - Don't escape unescaped quotes
+            WordPart::Simple(s) => {
+                // Add handling for escaped characters in unquoted text
                 let mut result = String::new();
                 let mut chars = s.chars().peekable();
                 while let Some(c) = chars.next() {
@@ -37,22 +31,45 @@ impl Word {
                         '\\' => {
                             if let Some(&next) = chars.peek() {
                                 match next {
-                                    '"' | '\\' | '$' | '`' => {
-                                        // For these special characters, consume the backslash
-                                        // and only output the character
-                                        chars.next();
+                                    // In unquoted text, preserve escaped quotes
+                                    '"' | '\'' => {
                                         result.push(next);
+                                        chars.next();
                                     },
                                     _ => {
-                                        // For all other characters after backslash,
-                                        // keep both the backslash and the character
                                         result.push('\\');
                                         result.push(next);
                                         chars.next();
                                     }
                                 }
-                            } else {
-                                result.push('\\');
+                            }
+                        },
+                        _ => result.push(c)
+                    }
+                }
+                result
+            },
+            WordPart::SingleQuoted(s) => s.clone(),
+            WordPart::DoubleQuoted(s) => {
+                let mut result = String::new();
+                let mut chars = s.chars().peekable();
+                while let Some(c) = chars.next() {
+                    match c {
+                        '\\' => {
+                            if let Some(&next) = chars.peek() {
+                                match next {
+                                    // Only escape quote characters in double quotes
+                                    '"' => {
+                                        chars.next();  // consume the quote
+                                        result.push('"');
+                                    },
+                                    _ => {
+                                        // Any other escaped character should remain as-is
+                                        result.push('\\');
+                                        result.push(next);
+                                        chars.next();
+                                    }
+                                }
                             }
                         },
                         _ => result.push(c)
