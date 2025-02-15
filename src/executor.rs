@@ -243,22 +243,30 @@ impl Executor {
     fn execute_with_redirection(&mut self, command: &ASTNode, fd: i32, file: std::fs::File, _mode: &RedirectMode) -> Result<ExitStatus, String> {
         match command {
             ASTNode::Command { name, args } => {
+                // First process the command name
+                let processed_name = process_text(name, ProcessingMode::Command);
+
+                // Process args differently for builtins vs external commands
                 let expanded_args: Vec<String> = args.iter()
                     .map(|arg| self.expand_variables(arg))
+                    .map(|arg| {
+                        arg.map(|s| match get_quote_type(&s) {
+                            QuoteType::Single => s[1..s.len()-1].to_string(),
+                            QuoteType::Double => process_text(&s, ProcessingMode::Argument),
+                            _ => s
+                        })
+                    })
                     .collect::<Result<_, _>>()?;
 
-                if utils::is_builtin(name) {
+                if utils::is_builtin(&processed_name) {
                     if fd == 1 {
-                        self.execute_builtin_with_redirection(name, &expanded_args, Some(file))
+                        self.execute_builtin_with_redirection(&processed_name, &expanded_args, Some(file))
                     } else {
                         Err("Redirection not supported for this file descriptor on builtins".to_string())
                     }
-                } else if let Some(cmd_path) = search_cmd(name, &std::env::var("PATH").unwrap_or_default()) {
+                } else if let Some(cmd_path) = search_cmd(&processed_name, &std::env::var("PATH").unwrap_or_default()) {
                     let mut cmd = std::process::Command::new(cmd_path);
-                    let processed_args: Vec<String> = expanded_args.iter()
-                        .map(|arg| process_text(arg, ProcessingMode::Argument))
-                        .collect();
-                    cmd.args(&processed_args);
+                    cmd.args(&expanded_args);
 
                     match fd {
                         0 => { cmd.stdin(file); }
