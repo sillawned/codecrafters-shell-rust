@@ -20,11 +20,8 @@ pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
             if args.is_empty() {
                 println!();
             } else {
-                // Process each argument to remove quotes
-                let processed_args: Vec<String> = args.iter()
-                    .map(|arg| process_text(arg, ProcessingMode::Argument))
-                    .collect();
-                println!("{}", processed_args.join(" "));
+                // Just print args as-is, with space between them
+                println!("{}", args.join(" "));
             }
             Ok(())
         }

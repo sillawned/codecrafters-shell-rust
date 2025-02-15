@@ -1,87 +1,50 @@
+use crate::types::QuoteType;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ProcessingMode {
-    Command,    // For command names (preserve most characters)
-    Argument,   // For command arguments (handle escapes)
-    Path,       // For file paths (preserve slashes and dots)
-    Literal,    // For literal strings (no processing)
+    Command,    // For command names 
+    Argument,   // For command arguments
+    Path,       // For file paths
+    Literal,    // For literal strings
 }
 
 pub fn process_text(text: &str, mode: ProcessingMode) -> String {
-    let mut result = String::new();
-    
-    // Strip outer quotes if they exist
-    let text = match mode {
-        ProcessingMode::Argument => {
-            if (text.starts_with('\'') && text.ends_with('\'')) ||
-               (text.starts_with('"') && text.ends_with('"')) {
-                &text[1..text.len()-1]
-            } else {
-                text
+    match mode {
+        ProcessingMode::Command | ProcessingMode::Argument => {
+            // Pattern match the string content
+            match text {
+                // Single-quoted string: preserve everything literally
+                s if s.starts_with('\'') && s.ends_with('\'') => s[1..s.len()-1].to_string(),
+                
+                // Double-quoted string: preserve internal quotes
+                s if s.starts_with('"') && s.ends_with('"') => {
+                    let inner = &s[1..s.len()-1];
+                    inner.replace("\\\"", "\"")
+                         .replace("\\$", "$")
+                         .replace("\\`", "`")
+                         .replace("\\\\", "\\")
+                },
+                
+                // Unquoted: handle escapes
+                s => s.chars().fold(String::new(), |mut acc, c| {
+                    match c {
+                        '\\' => (),  // Skip backslash, next char will be literal
+                        _ => acc.push(c)
+                    }
+                    acc
+                })
             }
         },
-        _ => text
-    };
-    
-    let mut chars = text.chars().peekable();
-    let mut in_single_quote = false;
-    let mut in_double_quote = false;
-    
-    while let Some(c) = chars.next() {
-        match (c, in_single_quote, in_double_quote) {
-            ('\'', false, false) => {
-                in_single_quote = true;
-                match mode {
-                    ProcessingMode::Command => result.push(c),
-                    ProcessingMode::Literal => result.push(c),
-                    _ => {}
-                }
-            }
-            ('\'', true, false) => {
-                in_single_quote = false;
-                match mode {
-                    ProcessingMode::Command => result.push(c),
-                    ProcessingMode::Literal => result.push(c),
-                    _ => {}
-                }
-            }
-            ('"', false, false) => {
-                in_double_quote = true;
-                match mode {
-                    ProcessingMode::Command => result.push(c),
-                    ProcessingMode::Literal => result.push(c),
-                    _ => {}
-                }
-            }
-            ('"', false, true) => {
-                in_double_quote = false;
-                match mode {
-                    ProcessingMode::Command => result.push(c),
-                    ProcessingMode::Literal => result.push(c),
-                    _ => {}
-                }
-            }
-            ('\\', _, _) => {
-                if let Some(next) = chars.next() {
-                    match (next, mode) {
-                        ('\'', ProcessingMode::Command) |
-                        ('"', ProcessingMode::Command) => {
-                            result.push(next); // Keep quotes in command names
-                        },
-                        ('\'', _) | ('"', _) => {
-                            result.push('\\');
-                            result.push(next);
-                        },
-                        ('n', _) => result.push('\n'),
-                        ('t', _) => result.push('\t'),
-                        ('r', _) => result.push('\r'),
-                        (c, _) => result.push(c),
-                    }
-                }
-            }
-            (c, true, _) => result.push(c),  // In single quotes, preserve everything
-            (c, _, true) => result.push(c),  // In double quotes, preserve most things
-            (c, false, false) => result.push(c),  // Outside quotes, normal character
-        }
+        _ => text.to_string()  // Path and Literal modes preserve everything
     }
-    result
+}
+
+// Add a helper function to determine the quote type
+pub fn get_quote_type(s: &str) -> QuoteType {
+    match s {
+        s if s.starts_with('\'') && s.ends_with('\'') => QuoteType::Single,
+        s if s.starts_with('"') && s.ends_with('"') => QuoteType::Double,
+        s if s.contains('\\') => QuoteType::Escaped,
+        _ => QuoteType::None
+    }
 }

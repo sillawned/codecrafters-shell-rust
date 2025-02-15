@@ -5,7 +5,8 @@ use crate::{
     ast::{ASTNode, RedirectMode, RedirectTarget},
     builtins,
     utils::{self, search_cmd},
-    processor::{process_text, ProcessingMode},
+    processor::{get_quote_type, process_text, ProcessingMode},
+    types::QuoteType,
 };
 use tempfile;
 
@@ -69,41 +70,33 @@ impl Executor {
     pub fn execute(&mut self, node: &ASTNode) -> Result<ExitStatus, String> {
         match node {
             ASTNode::Command { name, args } => {
-                // First process the command name to strip quotes if present
-                let processed_name = process_text(name, ProcessingMode::Command);
-                
-                // Check for variable assignments
-                if processed_name.contains('=') {
-                    self.handle_assignment(&processed_name)?;
-                    return Ok(ExitStatus::from_raw(0));
-                }
+                let processed_name = match get_quote_type(name) {
+                    QuoteType::Single | QuoteType::Double | QuoteType::Escaped => process_text(name, ProcessingMode::Command),
+                    QuoteType::None => name.to_string()
+                };
 
-                // Expand variables in arguments and process them
                 let expanded_args: Vec<String> = args.iter()
                     .map(|arg| self.expand_variables(arg))
-                    .map(|arg| arg.map(|s| process_text(&s, ProcessingMode::Argument)))
+                    .map(|arg| {
+                        arg.map(|s| match get_quote_type(&s) {
+                            QuoteType::Single => s[1..s.len()-1].to_string(),
+                            QuoteType::Double | QuoteType::Escaped => process_text(&s, ProcessingMode::Argument),
+                            QuoteType::None => s
+                        })
+                    })
                     .collect::<Result<_, _>>()?;
 
-                // Rest of command execution...
-                let paths = std::env::var("PATH").unwrap_or_default();
-            
                 if utils::is_builtin(&processed_name) {
-                    let processed_args: Vec<String> = expanded_args.iter()
-                        .map(|arg| process_argument(arg))
-                        .collect();
-                    match builtins::execute_builtin(&processed_name, &processed_args) {
+                    match builtins::execute_builtin(&processed_name, &expanded_args) {
                         Ok(()) => Ok(ExitStatus::from_raw(0)),
                         Err(e) => {
                             eprintln!("{}", e);
                             Ok(ExitStatus::from_raw(1))
                         }
                     }
-                } else if let Some(cmd_path) = search_cmd(&processed_name, &paths) {
+                } else if let Some(cmd_path) = search_cmd(&processed_name, &std::env::var("PATH").unwrap_or_default()) {
                     let mut cmd = std::process::Command::new(cmd_path);
-                    let processed_args: Vec<String> = expanded_args.iter()
-                        .map(|arg| process_argument(arg))
-                        .collect();
-                    cmd.args(&processed_args);
+                    cmd.args(&expanded_args);
                     execute_command(&mut cmd)
                 } else {
                     eprintln!("{}: command not found", processed_name);

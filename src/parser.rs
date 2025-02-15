@@ -1,5 +1,6 @@
 use crate::ast::{ASTNode, RedirectMode, RedirectTarget};
-use crate::lexer::{Token, Operator, QuoteType};
+use crate::lexer::{Token, Operator};
+use crate::types::QuoteType;
 
 pub fn parse(tokens: &[Token]) -> Result<ASTNode, String> {
     let mut parser = Parser::new(tokens);
@@ -63,6 +64,7 @@ impl<'a> Parser<'a> {
                                 self.advance();
                             }
                         }
+                        QuoteType::None => unreachable!()
                     }
                     self.advance();
                 },

@@ -1,5 +1,6 @@
 use std::iter::Peekable;
 use std::str::Chars;
+use crate::types::QuoteType;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -25,13 +26,6 @@ pub enum Operator {
     RedirectHereDoc, // <<
     RedirectHereStr, // <<<
     RedirectDup,     // >&
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum QuoteType {
-    Single,     // '
-    Double,     // "
-    Escaped,    // \
 }
 
 pub struct Lexer<'a> {
@@ -86,46 +80,28 @@ impl<'a> Lexer<'a> {
             match (c, in_single_quote, in_double_quote) {
                 ('\'', false, false) => {
                     in_single_quote = true;
-                    // Keep the quote for command names
                     word.push(c);
                     self.advance();
                 }
                 ('\'', true, false) => {
                     in_single_quote = false;
-                    // Keep the quote for command names
                     word.push(c);
                     self.advance();
                 }
                 ('"', false, false) => {
                     in_double_quote = true;
-                    // Keep the quote for command names
                     word.push(c);
                     self.advance();
                 }
                 ('"', false, true) => {
                     in_double_quote = false;
-                    // Keep the quote for command names
                     word.push(c);
                     self.advance();
                 }
-                ('\\', false, true) => {
-                    self.advance(); // consume backslash
+                ('\\', _, _) => {
+                    word.push(c);
+                    self.advance();
                     if let Some(next) = self.current {
-                        // Keep escaped quotes in the word
-                        if next == '\'' || next == '"' {
-                            word.push('\\');
-                        }
-                        word.push(next);
-                        self.advance();
-                    }
-                }
-                ('\\', false, false) => {
-                    self.advance(); // consume backslash
-                    if let Some(next) = self.current {
-                        // Keep escaped quotes in the word
-                        if next == '\'' || next == '"' {
-                            word.push('\\');
-                        }
                         word.push(next);
                         self.advance();
                     }

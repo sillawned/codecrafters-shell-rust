@@ -13,6 +13,7 @@ pub mod tokenizer;
 pub mod utils;
 pub mod processor;
 pub mod lexer;
+pub mod types;
 
 fn main() {
     // Set up signal handlers like bash
