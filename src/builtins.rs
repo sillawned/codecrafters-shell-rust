@@ -1,12 +1,22 @@
-use std::{env, path::Path};
-use crate::{
-    utils::search_cmd,
-    processor::{process_text, ProcessingMode},
-};
+use std::env;
+use std::path::Path;
+use crate::utils::search_cmd;
 
 pub const BUILTINS: [&str; 15] = [
     "exit", "echo", "type", "pwd", "cd", "alias", "unalias", "export", "unset", "history", "jobs", "fg", "bg", "kill", "wait"
 ];
+
+pub fn expand_tilde(path: &str) -> Result<String, String> {
+    if path == "~" {
+        env::var("HOME").map_err(|_| "HOME not set".to_string())
+    } else if path.starts_with("~/") {
+        env::var("HOME")
+            .map(|home| format!("{}{}", home, &path[1..]))
+            .map_err(|_| "HOME not set".to_string())
+    } else {
+        Ok(path.to_string())
+    }
+}
 
 pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
     match name {
@@ -20,7 +30,6 @@ pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
             if args.is_empty() {
                 println!();
             } else {
-                // Just print args as-is, with space between them
                 println!("{}", args.join(" "));
             }
             Ok(())
@@ -30,25 +39,24 @@ pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
             Ok(())
         }
         "cd" => {
-            let path = if args.is_empty() {
-                env::var("HOME").map_err(|_| "HOME not set")?
-            } else {
-                args[0].clone()
-            };
-            
-            if path == "-" {
+            let raw_path = if args.is_empty() {
+                "~".to_string()
+            } else if args[0] == "-" {
                 // Handle cd - to previous directory
                 let prev = env::var("OLDPWD").map_err(|_| "OLDPWD not set")?;
                 let curr = env::current_dir().map_err(|e| e.to_string())?;
                 env::set_var("OLDPWD", curr.to_string_lossy().to_string());
                 env::set_current_dir(&prev).map_err(|e| e.to_string())?;
                 println!("{}", prev);
-                Ok(())
+                return Ok(())
             } else {
-                let curr = env::current_dir().map_err(|e| e.to_string())?;
-                env::set_var("OLDPWD", curr.to_string_lossy().to_string());
-                env::set_current_dir(Path::new(&path)).map_err(|e| e.to_string())
-            }
+                args[0].clone()
+            };
+
+            let path = expand_tilde(&raw_path)?;
+            let curr = env::current_dir().map_err(|e| e.to_string())?;
+            env::set_var("OLDPWD", curr.to_string_lossy().to_string());
+            env::set_current_dir(Path::new(&path)).map_err(|e| e.to_string())
         },
         "type" => {
             if BUILTINS.contains(&args[0].as_str()) {
