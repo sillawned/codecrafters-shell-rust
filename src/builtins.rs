@@ -57,7 +57,7 @@ pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
             let curr = env::current_dir().map_err(|e| e.to_string())?;
             env::set_var("OLDPWD", curr.to_string_lossy().to_string());
             env::set_current_dir(Path::new(&path))
-                .map_err(|e| format!("cd: {}: {}", raw_path, e.to_string().split(':').next().unwrap_or("Unknown error")))
+                .map_err(|_| format!("cd: {}: No such file or directory", raw_path))
         },
         "type" => {
             if BUILTINS.contains(&args[0].as_str()) {
