@@ -78,7 +78,31 @@ pub fn execute_builtin(name: &str, args: &[String]) -> Result<(), String> {
             Ok(())
         }
         "export" => {
-            // Implement export functionality
+            if args.is_empty() {
+                // Print all environment variables
+                for (key, value) in env::vars() {
+                    println!("declare -x {}=\"{}\"", key, value);
+                }
+                return Ok(());
+            }
+
+            for arg in args {
+                if let Some(pos) = arg.find('=') {
+                    // Handle NAME=value format
+                    let (name, value) = arg.split_at(pos);
+                    let value = value.trim_start_matches('=');
+                    // Remove surrounding quotes if present
+                    let value = value.trim_matches(|c| c == '"' || c == '\'');
+                    env::set_var(name, value);
+                } else {
+                    // Handle NAME format (just mark as exported)
+                    if let Ok(value) = env::var(arg) {
+                        env::set_var(arg, value);
+                    } else {
+                        env::set_var(arg, "");
+                    }
+                }
+            }
             Ok(())
         }
         "unset" => {
