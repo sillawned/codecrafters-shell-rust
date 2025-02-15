@@ -21,31 +21,18 @@ impl Word {
     }
 
     pub fn to_string(&self) -> String {
-        // TODO: The WordPart::Simple handling needs to be modified
-        // 1. Keep backslashes in paths
-        // 2. For non-quoted text, preserve backslashes
-        // 3. Only process escapes in quoted strings
         self.parts.iter().map(|part| match part {
             WordPart::Simple(s) => {
-                // Add handling for escaped characters in unquoted text
                 let mut result = String::new();
                 let mut chars = s.chars().peekable();
                 while let Some(c) = chars.next() {
                     match c {
                         '\\' => {
-                            if let Some(&next) = chars.peek() {
-                                match next {
-                                    // In unquoted text, preserve escaped quotes
-                                    '"' | '\'' => {
-                                        result.push(next);
-                                        chars.next();
-                                    },
-                                    _ => {
-                                        result.push('\\');
-                                        result.push(next);
-                                        chars.next();
-                                    }
-                                }
+                            // In unquoted text:
+                            // Any character after backslash should be taken literally
+                            // The backslash is removed, the next character is used as-is
+                            if let Some(next) = chars.next() {
+                                result.push(next);
                             }
                         },
                         _ => result.push(c)
