@@ -333,7 +333,9 @@ fn build_command(node: &ASTNode) -> Result<std::process::Command, String> {
         ASTNode::Command { name, args } => {
             let paths = std::env::var("PATH").unwrap_or_default();
             if let Some(cmd_path) = search_cmd(name, &paths) {
-                let mut cmd = std::process::Command::new(cmd_path);
+                let mut cmd = std::process::Command::new(&cmd_path);
+                // Set program name to be the command as typed by user
+                cmd.arg0(name);
                 cmd.args(args);
                 Ok(cmd)
             } else {
