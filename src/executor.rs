@@ -50,20 +50,9 @@ impl Executor {
 
                 let expanded_args: Vec<String> = args.iter()
                     .map(|arg| self.expand_variables(arg))
-                    // .map(|arg| {
-                    //     arg.map(|s| match get_quote_type(&s) {
-                    //         // FIXME: This is where quotes are being stripped incorrectly
-                    //         // We should:
-                    //         // 1. NOT strip quotes from single-quoted strings
-                    //         // 2. Process double-quoted strings through Word processor
-                    //         // 3. Let Word::to_string handle the escaping logic
-                    //         // 4. Remove this quote stripping logic entirely
-                    //         QuoteType::Single => s[1..s.len()-1].to_string(),
-                    //         QuoteType::Double | QuoteType::Escaped => process_text(&s, ProcessingMode::Argument),
-                    //         QuoteType::None => s
-                    //     })
-                    // })
                     .collect::<Result<_, _>>()?;
+                #[cfg(debug_assertions)]
+                println!("Expanded args: {:?}", expanded_args);
 
                 if utils::is_builtin(&processed_name) {
                     match builtins::execute_builtin(&processed_name, &expanded_args) {
@@ -198,22 +187,27 @@ impl Executor {
     fn expand_variables(&self, arg: &str) -> Result<String, String> {
         let mut result = String::new();
         let mut chars = arg.chars().peekable();
+        let mut escape_next = false;
         
         while let Some(c) = chars.next() {
-            match c {
-                '$' => {
+            match (c, escape_next) {
+                (c, true) => {
+                    // Keep both the backslash and the escaped character
+                    result.push('\\');
+                    result.push(c);
+                    escape_next = false;
+                }
+                ('\\', false) => {
+                    escape_next = true;
+                }
+                ('$', false) => {
                     let var_name = self.read_variable_name(&mut chars)?;
                     let value = self.environment.get(&var_name)
                         .map(|s| s.as_str())
                         .unwrap_or("");
                     result.push_str(value);
                 }
-                '\\' => {
-                    if let Some(next) = chars.next() {
-                        result.push(next);
-                    }
-                }
-                _ => result.push(c),
+                (c, false) => result.push(c),
             }
         }
         Ok(result)

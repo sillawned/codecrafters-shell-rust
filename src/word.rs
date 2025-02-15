@@ -21,6 +21,10 @@ impl Word {
     }
 
     pub fn to_string(&self) -> String {
+        // TODO: The WordPart::Simple handling needs to be modified
+        // 1. Keep backslashes in paths
+        // 2. For non-quoted text, preserve backslashes
+        // 3. Only process escapes in quoted strings
         self.parts.iter().map(|part| match part {
             WordPart::Simple(s) => {
                 // Add handling for escaped characters in unquoted text
