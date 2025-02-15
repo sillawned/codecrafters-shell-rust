@@ -43,10 +43,10 @@ impl Executor {
     pub fn execute(&mut self, node: &ASTNode) -> Result<ExitStatus, String> {
         match node {
             ASTNode::Command { name, args } => {
-                let processed_name = match get_quote_type(name) {
-                    QuoteType::Single | QuoteType::Double | QuoteType::Escaped => process_text(name, ProcessingMode::Command),
-                    QuoteType::None => name.to_string()
-                };
+                let processed_name = name.to_string();
+                // match get_quote_type(name) {
+                //     QuoteType::None | QuoteType::Single | QuoteType::Double | QuoteType::Escaped => process_text(name, ProcessingMode::Command),
+                // };
 
                 let expanded_args: Vec<String> = args.iter()
                     .map(|arg| self.expand_variables(arg))

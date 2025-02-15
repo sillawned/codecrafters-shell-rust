@@ -63,9 +63,9 @@ impl Word {
                             if let Some(&next) = chars.peek() {
                                 match next {
                                     // Only escape quote characters in double quotes
-                                    '"' => {
+                                    '$' | '`' | '"' | '\\' | '\n' => {
+                                        result.push(next);
                                         chars.next();  // consume the quote
-                                        result.push('"');
                                     },
                                     _ => {
                                         // Any other escaped character should remain as-is

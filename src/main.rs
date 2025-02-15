@@ -9,7 +9,6 @@ pub mod ast;
 pub mod builtins;
 pub mod executor;
 pub mod parser;
-pub mod tokenizer;
 pub mod utils;
 pub mod processor;
 pub mod lexer;
