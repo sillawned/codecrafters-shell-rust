@@ -32,10 +32,18 @@ impl Completer {
 
         // Add PATH commands
         if let Ok(path) = std::env::var("PATH") {
+
+            // #[cfg(debug_assertions)]
+            // println!("PATH: {:?}", path);
+
             for dir in path.split(':') {
                 if let Ok(entries) = fs::read_dir(dir) {
                     for entry in entries.filter_map(|r: std::io::Result<_>| r.ok()) {
-                        if let Ok(metadata) = entry.metadata() {
+                        if let Ok(metadata) = fs::metadata(entry.path()) {
+
+                            // #[cfg(debug_assertions)]
+                            // println!("{:?}: {:?}", entry.path(), metadata.permissions());
+
                             if metadata.is_file() && metadata.permissions().mode() & 0o111 != 0 {
                                 if let Some(name) = entry.file_name().to_str() {
                                     commands.push(name.to_string());
@@ -49,6 +57,8 @@ impl Completer {
         
         commands.sort();
         commands.dedup();
+        // #[cfg(debug_assertions)]
+        // println!("Commands: {:?}", commands);
         commands
     }
 
