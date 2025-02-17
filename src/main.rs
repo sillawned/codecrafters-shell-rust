@@ -1,12 +1,12 @@
 use std::{
-    io::{self, Write},
     env,
     process::ExitStatus,
     os::unix::process::ExitStatusExt,
 };
 
 use rustyline::error::ReadlineError;
-use rustyline::{Editor, Result};
+use rustyline::Editor;
+use rustyline::config::Config;
 
 pub mod ast;
 pub mod builtins;
@@ -28,7 +28,12 @@ fn main() {
     }
 
     let completer = completion::Completer::new();
-    let mut rl = Editor::new().unwrap();
+    let config = Config::builder()
+        .completion_type(rustyline::CompletionType::List)
+        .history_ignore_space(true)
+        .history_ignore_dups(true).unwrap()
+        .build();
+    let mut rl = Editor::with_config(config).unwrap();
     rl.set_helper(Some(completer));
     
     #[allow(unused_assignments)]

@@ -32,18 +32,12 @@ impl Completer {
 
         // Add PATH commands
         if let Ok(path) = std::env::var("PATH") {
-
-            // #[cfg(debug_assertions)]
-            // println!("PATH: {:?}", path);
-
             for dir in path.split(':') {
                 if let Ok(entries) = fs::read_dir(dir) {
                     for entry in entries.filter_map(|r: std::io::Result<_>| r.ok()) {
+                        // fs::metadata to also get symlink
+                        // std:io::metadata doesn't support symlink
                         if let Ok(metadata) = fs::metadata(entry.path()) {
-
-                            // #[cfg(debug_assertions)]
-                            // println!("{:?}: {:?}", entry.path(), metadata.permissions());
-
                             if metadata.is_file() && metadata.permissions().mode() & 0o111 != 0 {
                                 if let Some(name) = entry.file_name().to_str() {
                                     commands.push(name.to_string());
@@ -57,8 +51,6 @@ impl Completer {
         
         commands.sort();
         commands.dedup();
-        // #[cfg(debug_assertions)]
-        // println!("Commands: {:?}", commands);
         commands
     }
 
@@ -93,7 +85,7 @@ impl Completer {
                     if name.starts_with(prefix) {
                         let mut full_path = dir.clone().join(name);
                         if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-                            full_path.push("");  // Add trailing slash for directories
+                            full_path.push("/");  // Add trailing slash for directories
                         }
                         completions.push(full_path.to_string_lossy().into_owned());
                     }
@@ -105,32 +97,21 @@ impl Completer {
     }
 }
 
-// Implement the required traits for rustyline
+// Basic trait implementations
 impl Helper for Completer {}
 
 impl RustylineCompleter for Completer {
     type Candidate = Pair;
 
-    fn complete(
-        &self,
-        line: &str,
-        pos: usize,
-        _ctx: &Context<'_>,
-    ) -> Result<(usize, Vec<Pair>)> {
+    fn complete(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> Result<(usize, Vec<Pair>)> {
         let start = line[..pos].rfind(char::is_whitespace).map_or(0, |i| i + 1);
-        let completions = self.complete(&line[start..pos]);
+        let current_word = &line[start..pos];
         
-        let pairs: Vec<Pair> = completions
-            .into_iter()
-            .map(|s| {
-                let display = s.clone();
-                // Add a space to the replacement unless it ends with a directory separator
-                let replacement = if s.ends_with('/') {
-                    s
-                } else {
-                    format!("{} ", s)
-                };
-                Pair { display, replacement }
+        let completions = self.complete(current_word);
+        let pairs = completions.into_iter()
+            .map(|s| Pair {
+                display: s.clone(),
+                replacement: if s.ends_with('/') { s } else { format!("{} ", s) },
             })
             .collect();
 
@@ -138,7 +119,6 @@ impl RustylineCompleter for Completer {
     }
 }
 
-// Implement stubs for required traits
 impl Highlighter for Completer {}
 impl Hinter for Completer {
     type Hint = String;
