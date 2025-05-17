@@ -58,14 +58,12 @@ fn process_escapes(s: &str, is_double_quoted: bool) -> String {
                             result.push(next_char_val); // Backslash removed, character is itself
                             chars.next(); // Consume the peeked character
                         }
-                        '\n' => { // Backslash-newline (line continuation)
-                            chars.next(); // Consume the newline, effectively removing both \ and newline
-                        }
-                        // For any other character X, \X in double quotes is literal \X
+                        // Removed newline handling: In double quotes, \\n is typically literal \\n.
+                        // If `echo -e` like behavior is desired, it's handled differently.
                         _ => {
                             result.push('\\'); // Keep the backslash
-                            result.push(next_char_val); // Keep the character
-                            chars.next(); // Consume the peeked character
+                            result.push(next_char_val); // This was pushing the char again, making \\X -> \\XX
+                            chars.next(); // This was consuming the char, correct is to let the outer loop pick it up or push it here and consume
                         }
                     }
                 } else { // Not double_quoted (unquoted context)

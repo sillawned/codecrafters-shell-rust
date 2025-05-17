@@ -556,21 +556,23 @@ impl Executor {
                 if let Some(next_char) = chars.next() {
                     if is_double_quoted {
                         match next_char {
-                            'n' => expanded_segment.push('\n'),
-                            't' => expanded_segment.push('\t'),
-                            '\\' => expanded_segment.push('\\'),
-                            '"' => expanded_segment.push('"'),
-                            '$' => expanded_segment.push('$'),
-                            '`' => expanded_segment.push('`'),
-                            _ => {
+                            '$' | '`' | '"' | '\\' => { // Characters that are escaped by backslash in double quotes
+                                expanded_segment.push(next_char);
+                            }
+                            // 'n' was previously here, causing \\n to become a newline.
+                            // In standard double quotes, \\n is literal \\n.
+                            // Other characters like 't', 'r' etc., if meant to be C-style escapes,
+                            // would typically require $'' or echo -e.
+                            _ => { // For other characters \\X becomes \\X (literal backslash, literal X)
                                 expanded_segment.push('\\');
                                 expanded_segment.push(next_char);
                             }
                         }
-                    } else {
+                    } else { // Not double quoted (e.g. simple word part after initial parsing)
+                        // \\X becomes X
                         expanded_segment.push(next_char);
                     }
-                } else {
+                } else { // Trailing backslash
                     expanded_segment.push('\\');
                 }
             } else if ch == '$' {
