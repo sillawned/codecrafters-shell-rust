@@ -169,7 +169,7 @@ impl Executor {
 
                 match unsafe { fork() } {
                     Ok(ForkResult::Parent { child, .. }) => {
-                        close(pipe_write_fd).map_err(|e| ShellError::NixError(e, "pipe_write_fd close failed in parent".to_string()))?;
+                        //close(pipe_write_fd).map_err(|e| ShellError::NixError(e, "pipe_write_fd close failed in parent".to_string()))?;
                         
                         let right_status_res = self.execute_internal(right, Some(pipe_read_fd), None);
                         
@@ -182,7 +182,8 @@ impl Executor {
                             },
                         }
                         
-                        close(pipe_read_fd).map_err(|e| ShellError::NixError(e, "pipe_read_fd close failed in parent after right exec".to_string()))?;
+                        
+                        // close(pipe_read_fd).map_err(|e| ShellError::NixError(e, "pipe_read_fd close failed in parent after right exec".to_string()))?;
                         
                         match waitpid(Some(child), None) {
                             Ok(WaitStatus::Exited(_status_left, _)) => {
@@ -205,13 +206,13 @@ impl Executor {
                         right_status_res
                     }
                     Ok(ForkResult::Child) => {
-                        close(pipe_read_fd).map_err(|e| ShellError::NixError(e, "pipe_read_fd close failed in left child".to_string()))?;
+                        //close(pipe_read_fd).map_err(|e| ShellError::NixError(e, "pipe_read_fd close failed in left child".to_string()))?;
                         dup2(pipe_write_fd, libc::STDOUT_FILENO).map_err(|e| ShellError::NixError(e, "dup2 stdout to pipe_write_fd failed in left child".to_string()))?;
-                        close(pipe_write_fd).map_err(|e| ShellError::NixError(e, "pipe_write_fd close failed in left child after dup2".to_string()))?;
+                        //close(pipe_write_fd).map_err(|e| ShellError::NixError(e, "pipe_write_fd close failed in left child after dup2".to_string()))?;
                         
                         if let Some(initial_stdin) = piped_stdin_fd {
                             dup2(initial_stdin, libc::STDIN_FILENO).map_err(|e| ShellError::NixError(e, "dup2 initial_stdin to stdin failed in left child".to_string()))?;
-                            close(initial_stdin).map_err(|e| ShellError::NixError(e, "initial_stdin close failed in left child after dup2".to_string()))?;
+                            //close(initial_stdin).map_err(|e| ShellError::NixError(e, "initial_stdin close failed in left child after dup2".to_string()))?;
                         }
 
                         match self.execute_internal(left, None, None) {
