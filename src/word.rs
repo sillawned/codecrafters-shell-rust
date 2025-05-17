@@ -50,34 +50,32 @@ fn process_escapes(s: &str, is_double_quoted: bool) -> String {
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '\\' {
-            if let Some(next_char) = chars.next() {
-                match next_char {
-                    'n' => result.push('\n'),
-                    't' => result.push('\t'),
-                    'r' => result.push('\r'),
-                    '\\' => result.push('\\'), // Literal backslash
-                    '\'' => result.push('\''),   // Literal single quote
-                    '"' => result.push('"'),   // Literal double quote
-                    '$' if is_double_quoted => result.push_str("\\$"), // In double quotes, \\$ -> $ (handled by var expansion later) or literal \$ if not var
-                    '`' if is_double_quoted => result.push_str("\\`"), // In double quotes, \\` -> ` (handled by cmd sub later) or literal \\`
-                    // For any other character following a backslash:
-                    // - In double quotes, if it's not one of the special ones above (n, t, r, \\, ', ", $, `),
-                    //   the backslash is literal. e.g., "foo\\bar" -> foo\\bar
-                    // - In unquoted context (is_double_quoted = false), the backslash escapes the next character,
-                    //   making it literal. e.g., foo\\bar -> foobar (unless it's a C-style escape)
-                    other => {
-                        if is_double_quoted {
-                            // In double quotes, unknown escapes like \\a mean literal backslash then 'a'
-                            result.push('\\');
-                            result.push(other);
-                        } else {
-                            // In unquoted context, \\a means 'a'
-                            result.push(other);
+            if let Some(&next_char_val) = chars.peek() {
+                if is_double_quoted {
+                    // Inside double quotes: backslash retains special meaning only before $, `, ", \\, or newline
+                    match next_char_val {
+                        '$' | '`' | '"' | '\\' => {
+                            result.push(next_char_val); // Backslash removed, character is itself
+                            chars.next(); // Consume the peeked character
+                        }
+                        '\n' => { // Backslash-newline (line continuation)
+                            chars.next(); // Consume the newline, effectively removing both \ and newline
+                        }
+                        // For any other character X, \X in double quotes is literal \X
+                        _ => {
+                            result.push('\\'); // Keep the backslash
+                            result.push(next_char_val); // Keep the character
+                            chars.next(); // Consume the peeked character
                         }
                     }
+                } else { // Not double_quoted (unquoted context)
+                    // In unquoted context, backslash preserves the literal value of the following character.
+                    // \X becomes X.
+                    result.push(next_char_val);
+                    chars.next(); // Consume the peeked character
                 }
             } else {
-                // Trailing backslash, keep it literal
+                // Trailing backslash: becomes literal (standard behavior)
                 result.push('\\');
             }
         } else {
