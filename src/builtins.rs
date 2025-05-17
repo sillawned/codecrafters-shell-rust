@@ -87,12 +87,21 @@ pub fn execute_builtin(
 
             let path_str = expand_tilde(&raw_path)?;
             let new_path = Path::new(&path_str);
+            
+            // Attempt to canonicalize the path *before* changing the directory.
+            // This path should be relative to the current_dir *before* the cd operation.
+            let canonical_path = if new_path.is_absolute() {
+                new_path.canonicalize().map_err(|e| format!("cd: failed to canonicalize absolute path {}: {}", path_str, e))?
+            } else {
+                current_dir.join(new_path).canonicalize().map_err(|e| format!("cd: failed to canonicalize relative path {}: {}", path_str, e))?
+            };
+
             let curr_display = current_dir.display().to_string(); // current_dir is PathBuf
             environment.insert("OLDPWD".to_string(), curr_display);
             
-            env::set_current_dir(new_path)
-                .map_err(|_| format!("cd: {}: No such file or directory", raw_path))?;
-            *current_dir = new_path.canonicalize().map_err(|e| format!("cd: failed to canonicalize path {}: {}", path_str, e))?; // Update and canonicalize
+            env::set_current_dir(&canonical_path) // Use the canonical_path
+                .map_err(|e| format!("cd: {}: {}", canonical_path.display(), e))?; // Error with canonical_path
+            *current_dir = canonical_path; // Update mutable current_dir with the already canonicalized path
             Ok(())
         },
         "type" => {
