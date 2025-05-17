@@ -7,11 +7,12 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-    Word(String),
+    Word(Word), // Changed from String to Word
     Operator(Operator),
     Quote(QuoteType),
     Space,
     NewLine,
+    CommandSubst(String), // Added for command substitution
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,6 +53,15 @@ impl<'a> Lexer<'a> {
 
         while let Some(c) = self.current {
             match c {
+                '`' => { // Handle backtick for command substitution
+                    self.advance(); // Consume the opening backtick
+                    let command_string = self.read_until_backtick();
+                    let mut word = Word::new();
+                    // Create a WordPart::Simple for the command substitution string `...`
+                    // The executor will handle the expansion of this.
+                    word.add_part(WordPart::Simple(format!("`{}`", command_string)));
+                    return Some(Token::Word(word)); 
+                }
                 ' ' | '\t' => {
                     self.advance();
                     if let Some(next_c) = self.current {
@@ -69,83 +79,115 @@ impl<'a> Lexer<'a> {
                     if let Some(&'>') = self.input.peek() {
                         return Some(self.read_operator());
                     }
-                    return Some(Token::Word(self.read_word()));
+                    return Some(Token::Word(self.read_word())); // read_word now returns Word
                 }
                 '|' | '&' | '>' | '<' | ';' => {
                     return Some(self.read_operator());
                 }
                 _ => {
-                    return Some(Token::Word(self.read_word()));
+                    return Some(Token::Word(self.read_word())); // read_word now returns Word
                 }
             }
         }
         None
     }
 
-    fn read_word(&mut self) -> String {
+    fn read_word(&mut self) -> Word { // Changed return type to Word
         let mut word = Word::new();
-        let mut current = String::new();
-        let mut in_single_quote = false;
-        let mut in_double_quote = false;
+        let mut current_segment = String::new(); // Stores current unquoted, single-quoted, or double-quoted segment
+        let mut current_quote_type = QuoteType::None;
         let mut escape_next = false;
         
         while let Some(c) = self.current {
-            match (c, escape_next, in_single_quote, in_double_quote) {
-                (c, true, _, _) => {
-                    current.push(c);
-                    escape_next = false;
-                    self.advance();
-                },
-                ('\\', false, false, true) | ('\\', false, false, false) => {
-                    escape_next = true;
-                    current.push(c);
-                    self.advance();
-                },
-                ('\'', false, false, false) => {
-                    if !current.is_empty() {
-                        word.add_part(WordPart::Simple(current));
-                        current = String::new();
+            match current_quote_type {
+                QuoteType::None => { // Currently not inside any quotes
+                    match c {
+                        '\\' if !escape_next => {
+                            escape_next = true;
+                            // For unquoted simple parts, backslash + char will be processed by Word::to_string or executor
+                            // Store the backslash and the char it escapes
+                            current_segment.push('\\'); 
+                            self.advance(); // consume backslash, next char will be pushed if it exists
+                            if let Some(escaped_char) = self.current { // Ensure there is a char to escape
+                                current_segment.push(escaped_char);
+                                self.advance(); // consume the escaped character
+                                escape_next = false; // Reset escape_next as it has been processed
+                            } else { // Trailing backslash
+                                // escape_next remains true, current_segment has trailing \\
+                                // This will be added as is to WordPart::Simple
+                            }
+                        }
+                        '\'' => {
+                            if !current_segment.is_empty() { word.add_part(WordPart::Simple(current_segment)); current_segment = String::new(); }
+                            current_quote_type = QuoteType::Single;
+                            self.advance(); // Consume opening single quote
+                        }
+                        '\"' => {
+                            if !current_segment.is_empty() { word.add_part(WordPart::Simple(current_segment)); current_segment = String::new(); }
+                            current_quote_type = QuoteType::Double;
+                            self.advance(); // Consume opening double quote
+                        }
+                        ' ' | '\t' | '\n' | '|' | '&' | '>' | '<' | ';' | '`' => { // Added ` to break word on command sub start
+                            break; // End of word
+                        }
+                        _ => {
+                            current_segment.push(c);
+                            self.advance();
+                            escape_next = false; // Reset if it was true from a previous incomplete escape
+                        }
                     }
-                    in_single_quote = true;
-                    self.advance();
-                },
-                ('\'', false, true, false) => {
-                    word.add_part(WordPart::SingleQuoted(current));
-                    current = String::new();
-                    in_single_quote = false;
-                    self.advance();
-                },
-                ('"', false, false, false) => {
-                    if !current.is_empty() {
-                        word.add_part(WordPart::Simple(current));
-                        current = String::new();
-                    }
-                    in_double_quote = true;
-                    self.advance();
-                },
-                ('"', false, false, true) => {
-                    word.add_part(WordPart::DoubleQuoted(current));
-                    current = String::new();
-                    in_double_quote = false;
-                    self.advance();
-                },
-                (' ' | '\t' | '\n' | '|' | '&' | '>' | '<' | ';', false, false, false) => break,
-                (c, _, _, _) => {
-                    current.push(c);
-                    self.advance();
                 }
+                QuoteType::Single => { // Inside single quotes
+                    match c {
+                        '\'' => { // End of single quotes
+                            word.add_part(WordPart::SingleQuoted(current_segment));
+                            current_segment = String::new();
+                            current_quote_type = QuoteType::None; self.advance(); // Consume closing single quote
+                        }
+                        _ => {
+                            current_segment.push(c);
+                            self.advance();
+                        }
+                    }
+                }
+                QuoteType::Double => { // Inside double quotes
+                    match c {
+                        '\\' if !escape_next => { // Potential escape within double quotes
+                            escape_next = true;
+                            current_segment.push('\\'); // Preserve backslash for now, Word::to_string or executor will handle it
+                            self.advance(); // Consume backslash, next char will be processed
+                        }
+                        '\"' if !escape_next => { // End of double quotes
+                            word.add_part(WordPart::DoubleQuoted(current_segment));
+                            current_segment = String::new();
+                            current_quote_type = QuoteType::None; self.advance(); // Consume closing double quote
+                        }
+                        _ => {
+                            if escape_next { // Character is escaped within double quotes (e.g., \n, \", \$)
+                                // current_segment already has the backslash
+                                current_segment.push(c); // Add the character being escaped
+                                escape_next = false; // Reset escape status
+                            } else { // Regular character inside double quotes
+                                current_segment.push(c);
+                            }
+                            self.advance();
+                        }
+                    }
+                }
+                QuoteType::Escaped => unreachable!(), // Not used in this revised logic
             }
         }
 
-        if !current.is_empty() {
-            match (in_single_quote, in_double_quote) {
-                (true, _) => word.add_part(WordPart::SingleQuoted(current)),
-                (_, true) => word.add_part(WordPart::DoubleQuoted(current)),
-                _ => word.add_part(WordPart::Simple(current)),
+        // Add any remaining segment
+        if !current_segment.is_empty() {
+            match current_quote_type {
+                QuoteType::None => word.add_part(WordPart::Simple(current_segment)),
+                QuoteType::Single => word.add_part(WordPart::SingleQuoted(current_segment)), // Unterminated single quote
+                QuoteType::Double => word.add_part(WordPart::DoubleQuoted(current_segment)), // Unterminated double quote
+                QuoteType::Escaped => unreachable!(),
             }
         }
-
-        word.to_string()
+        word
     }
 
     fn read_operator(&mut self) -> Token {
@@ -164,9 +206,9 @@ impl<'a> Lexer<'a> {
                                 2 => Token::Operator(Operator::RedirectErrorAppend),
                                 n => {
                                     // First put back the number and >> as a Word
-                                    let mut word = n.to_string();
-                                    word.push_str(">>");
-                                    Token::Word(word)
+                                    let mut word_val = Word::new(); // Create Word
+                                    word_val.add_part(WordPart::Simple(n.to_string() + ">>")); // Add as Simple part
+                                    Token::Word(word_val)
                                 }
                             }
                         }
@@ -176,7 +218,9 @@ impl<'a> Lexer<'a> {
                         }
                     }
                 } else {
-                    Token::Word(num.to_string())
+                    let mut word_val = Word::new(); // Create Word
+                    word_val.add_part(WordPart::Simple(num.to_string())); // Add as Simple part
+                    Token::Word(word_val)
                 }
             },
             Some('>') => {
@@ -251,6 +295,42 @@ impl<'a> Lexer<'a> {
         self.current = self.input.next();
     }
 
+    // New method to read content within backticks
+    fn read_until_backtick(&mut self) -> String {
+        let mut content = String::new();
+        let mut escape_next = false;
+        while let Some(c) = self.current {
+            if escape_next {
+                // Inside backticks, \\`, \\\\, \\$ are passed literally (e.g. \\` becomes `)
+                // Other escapes like \\n are literal \\ then n.
+                match c {
+                    '`' | '\\' | '$' => content.push(c), // These are escaped to be literal ` or \\ or $
+                    _ => { // Other escaped chars: literal backslash then char, e.g. \\n -> \\n
+                        content.push('\\');
+                        content.push(c);
+                    }
+                }
+                escape_next = false;
+                self.advance();
+                continue;
+            }
+            match c {
+                '\\' => { // Start of an escape sequence
+                    escape_next = true;
+                    self.advance(); // Consume the backslash, next char will be handled by `if escape_next` block
+                }
+                '`' => { // Closing backtick
+                    self.advance(); // Consume the closing backtick
+                    break;
+                }
+                _ => {
+                    content.push(c);
+                    self.advance();
+                }
+            }
+        }
+        content
+    }
 }
 
 pub fn lex(input: &str) -> Vec<Token> {

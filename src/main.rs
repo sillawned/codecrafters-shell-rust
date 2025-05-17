@@ -74,6 +74,7 @@ fn main() {
                 println!("AST: {:?}", &ast);
 
                 let mut executor = executor::Executor::new();
+                // Use the new public execute method
                 match executor.execute(&ast) {
                     Ok(status) => last_status = status,
                     Err(e) => {

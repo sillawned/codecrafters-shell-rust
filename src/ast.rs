@@ -1,8 +1,10 @@
-#[derive(Debug)]
+use crate::word::Word; // Import Word
+
+#[derive(Debug, Clone)] // Added Clone
 pub enum ASTNode {
     Command {
-        name: String,
-        args: Vec<String>,
+        name: Word,         // Changed from String to Word
+        args: Vec<Word>,    // Changed from Vec<String> to Vec<Word>
     },
     Pipe {
         left: Box<ASTNode>,
@@ -11,7 +13,7 @@ pub enum ASTNode {
     Redirect {
         command: Box<ASTNode>,
         fd: i32,
-        target: RedirectTarget,
+        target: RedirectTarget, // RedirectTarget itself will be updated
         mode: RedirectMode,
     },
     Background {
@@ -33,8 +35,11 @@ pub enum ASTNode {
         right: Box<ASTNode>,
     },
     Assignment {
-        var: String,
-        val: String,
+        var: String, // Keep as String for now, or change to Word if assignments can be complex
+        val: Word,   // Changed from String to Word
+    },
+    CommandSubstitution { // This might be removable if lexer fully handles it into Word
+        command_string: String,
     },
 }
 
@@ -49,10 +54,10 @@ pub enum RedirectMode {
     DupInput,       // <&
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)] // Added Clone
 pub enum RedirectTarget {
-    File(String),           // Regular file
+    File(Word),             // Changed from String to Word
     Descriptor(i32),        // File descriptor number
-    HereDoc(String),        // Here document content
-    HereString(String),     // Here string content
+    HereDoc(String),        // Here document content (remains String as it's raw content)
+    HereString(String),     // Here string content (remains String)
 }
