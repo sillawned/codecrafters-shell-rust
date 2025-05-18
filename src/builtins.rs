@@ -137,7 +137,7 @@ pub fn execute_builtin(
                 }
                 
                 if !current_name_found {
-                    if let Err(e) = writeln!(out_handle, "type: {}: not found", name_to_check) {
+                    if let Err(e) = writeln!(out_handle, "{}: not found", name_to_check) {
                         return Err(format!("type: write error: {}", e));
                     }
                     all_found = false; // If any name is not found, set all_found to false
