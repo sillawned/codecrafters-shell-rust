@@ -91,7 +91,7 @@ pub fn execute_builtin(
             // Attempt to canonicalize the path *before* changing the directory.
             // This path should be relative to the current_dir *before* the cd operation.
             let canonical_path = if new_path.is_absolute() {
-                new_path.canonicalize().map_err(|e| format!("cd: {}: {}", path_str, e))?
+                new_path.canonicalize().map_err(|e| format!("cd: {}: No such file or directory", path_str))?
             } else {
                 current_dir.join(new_path).canonicalize().map_err(|e| format!("cd: {}: {}....", path_str, e))?
             };
