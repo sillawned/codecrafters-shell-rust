@@ -124,16 +124,16 @@ pub fn execute_builtin(
                         return Err(format!("type: write error: {}", e));
                     }
                     current_name_found = true;
-                }
-
-                // Check if it's a command on PATH
-                // The `search_cmd` utility needs the PATH string from the environment.
-                let path_env_var = environment.get("PATH").map_or_else(|| "".to_string(), |s| s.clone());
-                if let Some(path_str) = crate::utils::search_cmd(name_to_check, &path_env_var) {
-                    if let Err(e) = writeln!(out_handle, "{} is {}", name_to_check, path_str) {
-                        return Err(format!("type: write error: {}", e));
+                } else {
+                    // Check if it's a command on PATH only if not a builtin
+                    // The `search_cmd` utility needs the PATH string from the environment.
+                    let path_env_var = environment.get("PATH").map_or_else(|| "".to_string(), |s| s.clone());
+                    if let Some(path_str) = crate::utils::search_cmd(name_to_check, &path_env_var) {
+                        if let Err(e) = writeln!(out_handle, "{} is {}", name_to_check, path_str) {
+                            return Err(format!("type: write error: {}", e));
+                        }
+                        current_name_found = true;
                     }
-                    current_name_found = true;
                 }
                 
                 if !current_name_found {
