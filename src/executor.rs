@@ -99,7 +99,7 @@ impl Executor {
                     // Stdout/Stderr are inherited by default unless redirected by ASTNode::Redirect or ASTNode::Pipe
                     execute_command_process(&mut cmd)
                 } else {
-                    eprintln!("{}: command not found", processed_name_str);
+                    //eprintln!("{}: command not found", processed_name_str);
                     Err(ShellError::CommandNotFound(processed_name_str))
                 };
 
