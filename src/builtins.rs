@@ -153,7 +153,7 @@ pub fn execute_builtin(
             } else {
                 // POSIX specifies exit status > 0 if any name is not found.
                 // Common practice is 1.
-                Err("type: one or more arguments not found".to_string()) // This error message won't be printed by shell, exit status matters.
+                Err("".to_string()) // This error message won't be printed by shell, exit status matters.
                                                                       // The executor will handle mapping this Err to an ExitStatus::Failure(1)
             }
         },
